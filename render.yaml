@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: wakemate-backend  # 可自訂服務名稱
+    plan: free              # 免費方案
+    build:
+      dockerfile: Dockerfile   # 使用您的 Dockerfile 構建
+    envVars:
+      - key: DATABASE_URL      # 本地測試用環境變數（部署時會被 Render 的 DB 覆蓋）
+        value: postgresql://user:123456@localhost:5432/user_info_wakemate_db
+    healthCheckPath: /ping     # 健康檢查端點（對應您的 /ping API）
