@@ -11,12 +11,12 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-# ✅ 複製整個專案（包含 app/ 資料夾）
+# 複製整個專案（包含 app/ 資料夾）
 COPY . .
 
-# ✅ 設定環境變數（Render 上會 override）
-ENV DATABASE_URL=postgresql://user:password@localhost:5432/fastapi
+# 設定環境變數（Render 上會 override）
+ENV DATABASE_URL=postgresql://postgres:123456@localhost:5432/user_info_wakemate_db
 ENV PORT=10000
 
-# ✅ 指定執行 app.main:app（從 app/main.py 取出 app）
+# 指定執行 app.main:app（從 app/main.py 取出 app）
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
