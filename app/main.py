@@ -31,17 +31,13 @@ app.add_middleware(
 )
 
 @app.get("/ping")
-async def ping():
-    return {"message": "pong"}
-
-# 測試 API：檢查能否連線資料庫
-@app.get("/ping")
 def ping(db: Session = Depends(get_db)):
     try:
-        db.execute(text("SELECT 1"))  # 使用 text() 包起來
+        db.execute(text("SELECT 1"))
         return {"status": "success", "message": "連線成功 ✅"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
 
 # ========== 取得資料 ==========
 @app.get("/users/")
