@@ -2,13 +2,10 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-# from database import SessionLocal, engine
 import app.models as models
-from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine
-from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate
-from .database import Base
-from .database import SessionLocal, engine
-from . import models
+from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization
+from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate
+from .database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -38,7 +35,6 @@ def ping(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-
 # ========== 取得資料 ==========
 @app.get("/users/")
 def get_users(db: Session = Depends(get_db)):
@@ -63,6 +59,10 @@ def get_wake_target(db: Session = Depends(get_db)):
 @app.get("/recommendations/")
 def get_recommendations(db: Session = Depends(get_db)):
     return db.query(RecommendationsCaffeine).all()
+
+@app.get("/alertness_data/")
+def get_alertness_data(db: Session = Depends(get_db)):
+    return db.query(AlertnessDataForVisualization).all()
 
 # ========== 新增資料 ==========
 @app.post("/users/")
@@ -100,6 +100,14 @@ def create_user_intake(data: UsersRealTimeIntakeCreate, db: Session = Depends(ge
 @app.post("/users_pvt/")
 def create_user_pvt(data: UsersPVTResultsCreate, db: Session = Depends(get_db)):
     entry = UsersPVTResults(**data.dict())
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"status": "success", "id": entry.id}
+
+@app.post("/alertness_data/")
+def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_db)):
+    entry = AlertnessDataForVisualization(**data.dict())
     db.add(entry)
     db.commit()
     db.refresh(entry)

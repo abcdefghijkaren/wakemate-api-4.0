@@ -1,5 +1,5 @@
 # app/models.py
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Time, Float
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Time, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from .database import Base
 import uuid
@@ -52,3 +52,15 @@ class RecommendationsCaffeine(Base):
     user_id = Column(UUID(as_uuid=True))
     recommended_caffeine_amount = Column(Integer)
     recommended_caffeine_intake_timing = Column(Time(timezone=True))
+
+class AlertnessDataForVisualization(Base):
+    __tablename__ = "alertness_data_for_visualization"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
+    timestamp = Column(DateTime(timezone=True), nullable=False)
+    awake = Column(Boolean, nullable=False)
+    g_PD = Column(Float, nullable=False)
+    P0_values = Column(Float, nullable=False)
+    P_t_caffeine = Column(Float, nullable=False)
+    P_t_no_caffeine = Column(Float, nullable=False)
+    P_t_real = Column(Float, nullable=False)

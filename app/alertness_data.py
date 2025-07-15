@@ -3,9 +3,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import timedelta
 import psycopg2  # 假設使用 PostgreSQL 作為資料庫
+from psycopg2.extras import execute_values
 
 # ===== 連接到資料庫 =====
-conn = psycopg2.connect("dbname=your_db user=your_user password=your_password host=your_host")
+conn = psycopg2.connect(
+    dbname='user_info_wakemate_db',
+    user='postgres',
+    password='123456',
+    host='localhost',
+    port='5432'
+)
 cursor = conn.cursor()
 
 # ===== 從資料庫讀取資料 =====
@@ -98,9 +105,9 @@ P_t_real[~awake_flags] = np.nan
 # ===== 匯出計算結果至資料庫 =====
 for i in range(len(time_index)):
     cursor.execute("""
-        INSERT INTO alertness_data_for_visualization (user_id, timestamp, awake, g_PD, P0_values, P_t_caffeine, P_t_no_caffeine, P_t_real)
+        INSERT INTO alertness_data_for_visualization (user_id, timestamp, awake, "g_PD", "P0_values", "P_t_caffeine", "P_t_no_caffeine", "P_t_real")
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (caffeine_df['user_id'].iloc[0], time_index[i], awake_flags[i], g_PD[i], P0_values[i], P_t_caffeine[i], P_t_no_caffeine[i], P_t_real[i]))
+    """, (caffeine_df['user_id'].iloc[0], time_index[i], awake_flags[i].item(), float(g_PD[i]), float(P0_values[i]), float(P_t_caffeine[i]), float(P_t_no_caffeine[i]), float(P_t_real[i])))
 
 # 提交變更並關閉連接
 conn.commit()
