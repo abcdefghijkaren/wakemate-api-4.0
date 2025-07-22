@@ -4,14 +4,15 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 import psycopg2  # 假設使用 PostgreSQL 作為資料庫
 from psycopg2.extras import execute_values
+import os
 
 # ===== 連接到資料庫 =====
 conn = psycopg2.connect(
-    dbname='user_info_wakemate_db',
-    user='wakemate user',
-    password='neNuQ9GMsK7lahBvAsM5b9atg9ijsrwI',
-    host='dpg-d1pm85ruibrs73dt6bpg-a',
-    port='5432'
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST"),
+    port=os.getenv("DB_PORT", "5432")
 )
 cursor = conn.cursor()
 

@@ -9,5 +9,7 @@ services:
         python_version: 3.11.9
     envVars:
       - key: DATABASE_URL
-        value: postgresql://wakemate_user:neNuQ9GMsK7lahBvAsM5b9atg9ijsrwI@dpg-d1pm85ruibrs73dt6bpg-a.oregon-postgres.render.com/user_info_wakemate_db
+        fromDatabase:
+          name: user_info_wakemate_db
+          property: connectionString
     healthCheckPath: /ping
