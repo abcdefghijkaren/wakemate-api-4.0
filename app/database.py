@@ -4,8 +4,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# 讀取環境變數 DATABASE_URL（Render 會提供）
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:123456@localhost:5432/user_info_wakemate_db")
+# 使用 Render 提供的 External Database URL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://wakemate_user:neNuQ9GMsK7lahBvAsM5b9atg9ijsrwI@dpg-d1pm85ruibrs73dt6bpg-a.oregon-postgres.render.com/user_info_wakemate_db")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

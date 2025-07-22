@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 # 連接到資料庫
 conn = psycopg2.connect(
     dbname='user_info_wakemate_db',
-    user='postgres',
-    password='123456',
-    host='localhost',
+    user='wakemate user',
+    password='neNuQ9GMsK7lahBvAsM5b9atg9ijsrwI',
+    host='dpg-d1pm85ruibrs73dt6bpg-a',
     port='5432'
 )
 cursor = conn.cursor()
