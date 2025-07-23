@@ -19,7 +19,7 @@ cursor = conn.cursor()
 # ===== 從資料庫讀取資料 =====
 # 讀取咖啡因攝取數據
 caffeine_query = "SELECT * FROM users_real_time_intake;"
-caffeine_df = pd.read_sql_query(caffeine_query, conn, parse_dates=["takeing_timestamp"])
+caffeine_df = pd.read_sql_query(caffeine_query, conn, parse_dates=["taking_timestamp"])
 
 # 讀取睡眠數據
 sleep_query = "SELECT * FROM users_real_sleep_data;"
@@ -39,9 +39,9 @@ def sigmoid(x, L=100, x0=14, k=0.2):
     return L / (1 + np.exp(-k * (x - x0)))
 
 # ===== 建立時間軸 =====
-start_time = min(caffeine_df["takeing_timestamp"].min(),
+start_time = min(caffeine_df["taking_timestamp"].min(),
                  sleep_df["start_time"].min()).replace(minute=0, second=0)
-end_time = max(caffeine_df["takeing_timestamp"].max(),
+end_time = max(caffeine_df["taking_timestamp"].max(),
                sleep_df["end_time"].max()).replace(minute=0, second=0) + timedelta(hours=1)
 total_hours = int((end_time - start_time).total_seconds() // 3600)
 time_index = [start_time + timedelta(hours=i) for i in range(total_hours + 1)]
@@ -65,7 +65,7 @@ for i, time in enumerate(time_index):
 g_PD = np.ones(len(time_index), dtype=float)
 
 for _, row in caffeine_df.iterrows():
-    take_time = row["takeing_timestamp"]
+    take_time = row["taking_timestamp"]
     dose = float(row["caffeine_amount"])
     t_0 = int((take_time - start_time).total_seconds() // 3600)
     if t_0 >= len(t):
@@ -82,7 +82,7 @@ P_t_caffeine = P0_values * g_PD
 g_PD_real = np.ones(len(time_index), dtype=float)
 
 for _, row in caffeine_df.iterrows():
-    take_time = row["takeing_timestamp"]
+    take_time = row["taking_timestamp"]
     dose = float(row["caffeine_amount"])
     t_0 = int((take_time - start_time).total_seconds() // 3600)
     if t_0 >= len(t):

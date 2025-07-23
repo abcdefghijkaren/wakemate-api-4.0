@@ -34,7 +34,7 @@ class UsersRealTimeIntake(Base):
     user_id = Column(UUID(as_uuid=True))
     drink_name = Column(String)
     caffeine_amount = Column(Integer)
-    takeing_timestamp = Column(DateTime(timezone=True))
+    taking_timestamp = Column(DateTime(timezone=True))
 
 class UsersPVTResults(Base):
     __tablename__ = "users_pvt_results"

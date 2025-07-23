@@ -25,7 +25,7 @@ class UsersRealTimeIntakeCreate(BaseModel):
     user_id: UUID
     drink_name: str
     caffeine_amount: int
-    takeing_timestamp: datetime
+    taking_timestamp: datetime
 
 class UsersPVTResultsCreate(BaseModel):
     user_id: UUID

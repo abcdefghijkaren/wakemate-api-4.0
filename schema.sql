@@ -230,7 +230,7 @@ CREATE TABLE public.users_real_time_intake (
     user_id uuid NOT NULL,
     drink_name text NOT NULL,
     caffeine_amount integer NOT NULL,
-    takeing_timestamp timestamp with time zone NOT NULL
+    taking_timestamp timestamp with time zone NOT NULL
 );
 
 
