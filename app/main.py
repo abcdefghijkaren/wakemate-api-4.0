@@ -7,6 +7,7 @@ from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersR
 from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate
 from .database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
+import uuid
 
 app = FastAPI()
 
@@ -67,7 +68,11 @@ def get_alertness_data(db: Session = Depends(get_db)):
 # ========== 新增資料 ==========
 @app.post("/users/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = User(**user.dict())
+    # 自動產生 UUID（假設你的 User model 中 user_id 是 UUID 欄位）
+    db_user = User(
+        user_id=str(uuid.uuid4()),  # 自動產生 user_id
+        **user.dict()
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
