@@ -80,7 +80,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     hashed_password = pwd_context.hash(user.password)
     new_user = models.User(
-        id=str(uuid4()),
+        user_id=str(uuid4()),
         email=user.email,
         hashed_password=hashed_password,
         name=user.name
