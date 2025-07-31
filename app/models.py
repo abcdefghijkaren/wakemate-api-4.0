@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .database import Base
 import uuid
+from sqlalchemy.sql import func
 
 class User(Base):
     __tablename__ = "users"
@@ -15,11 +16,10 @@ class User(Base):
     user_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True, nullable=False)
     name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
-    weight = Column(Numeric, nullable=True)
-    age = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=True)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships (optional but helpful)
+    # Relationships
     waking_periods = relationship("UsersTargetWakingPeriod", back_populates="user")
     sleep_data = relationship("UsersRealSleepData", back_populates="user")
     intake_data = relationship("UsersRealTimeIntake", back_populates="user")

@@ -1,15 +1,20 @@
 # app/main.py
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app import models, schemas
 import app.models as models
 from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization
 from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate
 from .database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
+from uuid import uuid4
+from passlib.context import CryptContext
+from .database import engine
 
+models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 依賴注入：取得 DB session
 def get_db():
@@ -67,16 +72,27 @@ def get_alertness_data(db: Session = Depends(get_db)):
 
 # ========== 新增資料 ==========
 @app.post("/users/")
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    # 自動產生 UUID（假設你的 User model 中 user_id 是 UUID 欄位）
-    db_user = User(
-        user_id=str(uuid.uuid4()),  # 自動產生 user_id
-        **user.dict()
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # 檢查 email 是否重複
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    hashed_password = pwd_context.hash(user.password)
+    new_user = models.User(
+        id=str(uuid4()),
+        email=user.email,
+        hashed_password=hashed_password,
+        name=user.name
     )
-    db.add(db_user)
+    db.add(new_user)
     db.commit()
-    db.refresh(db_user)
-    return {"status": "success", "user_id": db_user.user_id}
+    db.refresh(new_user)
+    return {
+        "message": "User created successfully",
+        "user_id": new_user.id,
+        "email": new_user.email,
+    }
 
 @app.post("/users_wake/")
 def create_user_wake(data: UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):

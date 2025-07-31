@@ -1,26 +1,22 @@
 # app/schemas.py
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from datetime import datetime, time
 
 # --- 使用者註冊 ---
 class UserCreate(BaseModel):
     name: str
-    email: str
-    age: int
-    weight: float
-    created_at: datetime
+    email: EmailStr
+    password: str  # 新增
 
 class UserResponse(BaseModel):
     user_id: UUID
     name: str
-    email: str
-    age: int
-    weight: float
+    email: EmailStr
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # 替代 orm_mode = True
 
 # --- 使用者設定清醒區間 ---
 class UsersTargetWakingPeriodCreate(BaseModel):
