@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app import models, schemas
 import app.models as models
 from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization
-from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate
+from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse
 from .database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
@@ -71,16 +71,16 @@ def get_alertness_data(db: Session = Depends(get_db)):
     return db.query(AlertnessDataForVisualization).all()
 
 # ========== 新增資料 ==========
-@app.post("/users/")
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # 檢查 email 是否重複
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+@app.post("/users/", response_model=UserResponse)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    # 檢查 email 是否已存在
+    db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_password = pwd_context.hash(user.password)
-    new_user = models.User(
-        user_id=str(uuid4()),
+    new_user = User(
+        user_id=uuid4(),
         email=user.email,
         hashed_password=hashed_password,
         name=user.name
@@ -88,11 +88,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {
-        "message": "User created successfully",
-        "user_id": new_user.id,
-        "email": new_user.email,
-    }
+    return new_user  # 自動轉換為 UserResponse
 
 @app.post("/users_wake/")
 def create_user_wake(data: UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):
