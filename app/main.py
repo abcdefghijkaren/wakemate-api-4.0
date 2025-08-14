@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app import models, schemas
 import app.models as models
-from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization
-from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse
+from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization, DeviceHeartRateData
+from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse, DeviceHeartRateDataCreate
 from .database import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
@@ -70,6 +70,10 @@ def get_recommendations(db: Session = Depends(get_db)):
 def get_alertness_data(db: Session = Depends(get_db)):
     return db.query(AlertnessDataForVisualization).all()
 
+@app.get("/device_heart_rate/")
+def get_device_heart_rate_data(db: Session = Depends(get_db)):
+    return db.query(DeviceHeartRateData).all()
+
 # ========== 新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -125,6 +129,14 @@ def create_user_pvt(data: UsersPVTResultsCreate, db: Session = Depends(get_db)):
 @app.post("/alertness_data/")
 def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_db)):
     entry = AlertnessDataForVisualization(**data.dict())
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"status": "success", "id": entry.id}
+
+@app.post("/device_heart_rate/")
+def create_device_heart_rate(data: DeviceHeartRateDataCreate, db: Session = Depends(get_db)):
+    entry = DeviceHeartRateData(**data.dict())
     db.add(entry)
     db.commit()
     db.refresh(entry)

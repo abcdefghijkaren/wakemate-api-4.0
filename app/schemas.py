@@ -62,3 +62,12 @@ class AlertnessDataCreate(BaseModel):
     P_t_caffeine: float
     P_t_no_caffeine: float
     P_t_real: float
+
+# --- Device ---
+from typing import Optional
+class DeviceHeartRateDataCreate(BaseModel):
+    time: datetime
+    heartrate: int
+    confidence: int
+    source: Optional[str] = None  # 可選
+    user_id: Optional[UUID] = None  # 可選

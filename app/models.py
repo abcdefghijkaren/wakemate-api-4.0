@@ -101,3 +101,16 @@ class AlertnessDataForVisualization(Base):
     P_t_real = Column(Float, nullable=False)
 
     user = relationship("User", back_populates="alertness_data")
+
+
+class DeviceHeartRateData(Base):
+    __tablename__ = "device_heart_rate_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    time = Column(DateTime(timezone=True), nullable=False)
+    heartrate = Column(Integer, nullable=False)
+    confidence = Column(Integer, nullable=False)
+    source = Column(String, nullable=True)  # 允許為空
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)  # 允許為空
+
+    # user = relationship("User ", back_populates="device_heart_rate_data")  # 暫時不連結
