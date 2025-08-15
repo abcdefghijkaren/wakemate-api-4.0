@@ -21,8 +21,8 @@ class UserResponse(BaseModel):
 # --- 使用者設定清醒區間 ---
 class UsersTargetWakingPeriodCreate(BaseModel):
     user_id: UUID
-    target_start_time: str  # ISO 格式時間字串
-    target_end_time: str
+    target_start_time: datetime  # ISO 格式時間字串
+    target_end_time: datetime
 
 # --- 使用者實際睡眠資料 ---
 class UsersRealSleepDataCreate(BaseModel):
