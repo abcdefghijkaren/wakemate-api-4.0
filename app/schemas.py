@@ -27,8 +27,8 @@ class UsersTargetWakingPeriodCreate(BaseModel):
 # --- 使用者實際睡眠資料 ---
 class UsersRealSleepDataCreate(BaseModel):
     user_id: UUID
-    start_time: datetime
-    end_time: datetime
+    sleep_start_time: datetime
+    sleep_end_time: datetime
 
 # --- 使用者即時咖啡因攝取資料 ---
 class UsersRealTimeIntakeCreate(BaseModel):

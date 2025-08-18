@@ -44,8 +44,8 @@ class UsersRealSleepData(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    end_time = Column(DateTime(timezone=True), nullable=False)
+    sleep_start_time = Column(DateTime(timezone=True), nullable=False)
+    sleep_end_time = Column(DateTime(timezone=True), nullable=False)
 
     user = relationship("User", back_populates="sleep_data")
 
