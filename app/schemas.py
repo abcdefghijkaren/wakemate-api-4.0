@@ -96,6 +96,7 @@ class DeviceXYZTimeBase(BaseModel):
     x: float
     y: float
     z: float
+    user_id: UUID
 
 class DeviceXYZTimeDataCreate(DeviceXYZTimeBase):
     timestamp: time
