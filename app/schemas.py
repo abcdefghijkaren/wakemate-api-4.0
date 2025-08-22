@@ -2,6 +2,7 @@
 from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from datetime import datetime, time
+from typing import List, Optional
 
 # --- 使用者註冊 ---
 class UserCreate(BaseModel):
@@ -63,11 +64,57 @@ class AlertnessDataCreate(BaseModel):
     P_t_no_caffeine: float
     P_t_real: float
 
-# --- Device ---
+
+# --- Device ------------------------------------------------
 from typing import Optional
-class DeviceHeartRateDataCreate(BaseModel):
+
+# ========== Heart Rate ==========
+class DeviceHeartRateBase(BaseModel):
+    time: datetime
+    heartrate: float
+    confidence: float
+    source: Optional[str] = None
+    user_id: UUID
+
+class DeviceHeartRateDataCreate(DeviceHeartRateBase):
     time: datetime
     heartrate: int
     confidence: int
     source: Optional[str] = None  # 可選
     user_id: Optional[UUID] = None  # 可選
+
+class DeviceHeartRateResponse(DeviceHeartRateBase):
+    id: int
+    saved_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# ========== XYZ Time ==========
+class DeviceXYZTimeBase(BaseModel):
+    timestamp: time
+    x: float
+    y: float
+    z: float
+
+class DeviceXYZTimeDataCreate(DeviceXYZTimeBase):
+    timestamp: time
+    x: float
+    y: float
+    z: float
+    user_id: Optional[UUID] = None  # 可選
+
+class DeviceXYZTimeResponse(DeviceXYZTimeBase):
+    id: int
+    saved_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# 批量用 schema------------------------------------
+class BulkHeartRate(BaseModel):
+    records: List[DeviceHeartRateDataCreate]
+
+
+class BulkXYZTime(BaseModel):
+    records: List[DeviceXYZTimeDataCreate]

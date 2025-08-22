@@ -8,6 +8,7 @@ from sqlalchemy.orm import relationship
 from .database import Base
 import uuid
 from sqlalchemy.sql import func
+from datetime import datetime, timezone
 
 class User(Base):
     __tablename__ = "users"
@@ -35,6 +36,7 @@ class UsersTargetWakingPeriod(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     target_start_time = Column(Time(timezone=True), nullable=False)
     target_end_time = Column(Time(timezone=True), nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="waking_periods")
 
@@ -46,6 +48,7 @@ class UsersRealSleepData(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     sleep_start_time = Column(DateTime(timezone=True), nullable=False)
     sleep_end_time = Column(DateTime(timezone=True), nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="sleep_data")
 
@@ -58,6 +61,7 @@ class UsersRealTimeIntake(Base):
     drink_name = Column(String, nullable=False)
     caffeine_amount = Column(Integer, nullable=False)
     taking_timestamp = Column(DateTime(timezone=True), nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="intake_data")
 
@@ -72,6 +76,7 @@ class UsersPVTResults(Base):
     false_starts = Column(Integer, nullable=False)
     test_at = Column(DateTime(timezone=True), nullable=False)
     device = Column(String, nullable=True)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="pvt_results")
 
@@ -83,6 +88,7 @@ class RecommendationsCaffeine(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     recommended_caffeine_amount = Column(Integer, nullable=False)
     recommended_caffeine_intake_timing = Column(Time(timezone=True), nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="recommendations")
 
@@ -99,6 +105,7 @@ class AlertnessDataForVisualization(Base):
     P_t_caffeine = Column(Float, nullable=False)
     P_t_no_caffeine = Column(Float, nullable=False)
     P_t_real = Column(Float, nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="alertness_data")
 
@@ -112,5 +119,18 @@ class DeviceHeartRateData(Base):
     confidence = Column(Integer, nullable=False)
     source = Column(String, nullable=True)  # 允許為空
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)  # 允許為空
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # user = relationship("User ", back_populates="device_heart_rate_data")  # 暫時不連結
+
+
+class DeviceXYZTimeData(Base):
+    __tablename__ = "device_xyz_time"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(Time(timezone=False), nullable=False)  # 只有時間，無日期
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    z = Column(Float, nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)  # 允許為空
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

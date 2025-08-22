@@ -3,14 +3,12 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app import models, schemas
-import app.models as models
-from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization, DeviceHeartRateData
-from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse, DeviceHeartRateDataCreate
-from .database import SessionLocal
+from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization, DeviceHeartRateData, DeviceXYZTimeData
+from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse, DeviceHeartRateDataCreate, DeviceXYZTimeDataCreate
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 from passlib.context import CryptContext
-from .database import engine
+from .database import engine, SessionLocal
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
@@ -41,38 +39,6 @@ def ping(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# ========== 取得資料 ==========
-@app.get("/users/")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
-
-@app.get("/users_sleep/")
-def get_sleep_data(db: Session = Depends(get_db)):
-    return db.query(UsersRealSleepData).all()
-
-@app.get("/users_intake/")
-def get_intake_data(db: Session = Depends(get_db)):
-    return db.query(UsersRealTimeIntake).all()
-
-@app.get("/users_pvt/")
-def get_pvt_results(db: Session = Depends(get_db)):
-    return db.query(UsersPVTResults).all()
-
-@app.get("/users_wake/")
-def get_wake_target(db: Session = Depends(get_db)):
-    return db.query(UsersTargetWakingPeriod).all()
-
-@app.get("/recommendations/")
-def get_recommendations(db: Session = Depends(get_db)):
-    return db.query(RecommendationsCaffeine).all()
-
-@app.get("/alertness_data/")
-def get_alertness_data(db: Session = Depends(get_db)):
-    return db.query(AlertnessDataForVisualization).all()
-
-@app.get("/device_heart_rate/")
-def get_device_heart_rate_data(db: Session = Depends(get_db)):
-    return db.query(DeviceHeartRateData).all()
 
 # ========== 新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
@@ -134,10 +100,90 @@ def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_d
     db.refresh(entry)
     return {"status": "success", "id": entry.id}
 
-@app.post("/device_heart_rate/")
-def create_device_heart_rate(data: DeviceHeartRateDataCreate, db: Session = Depends(get_db)):
-    entry = DeviceHeartRateData(**data.dict())
-    db.add(entry)
+# @app.post("/device_heart_rate/")
+# def create_device_heart_rate(data: DeviceHeartRateDataCreate, db: Session = Depends(get_db)):
+#     entry = DeviceHeartRateData(**data.dict())
+#     db.add(entry)
+#     db.commit()
+#     db.refresh(entry)
+#     return {"status": "success", "id": entry.id}
+
+# @app.post("/device_xyz_time/")
+# def create_device_xyz_time(data: DeviceXYZTimeDataCreate, db: Session = Depends(get_db)):
+#     entry = DeviceXYZTimeData(**data.dict())
+#     db.add(entry)
+#     db.commit()
+#     db.refresh(entry)
+#     return {"status": "success", "id": entry.id}
+
+
+# ========== 取得資料 ==========
+@app.get("/users/")
+def get_users(db: Session = Depends(get_db)):
+    return db.query(User).all()
+
+@app.get("/users_sleep/")
+def get_sleep_data(db: Session = Depends(get_db)):
+    return db.query(UsersRealSleepData).all()
+
+@app.get("/users_intake/")
+def get_intake_data(db: Session = Depends(get_db)):
+    return db.query(UsersRealTimeIntake).all()
+
+@app.get("/users_pvt/")
+def get_pvt_results(db: Session = Depends(get_db)):
+    return db.query(UsersPVTResults).all()
+
+@app.get("/users_wake/")
+def get_wake_target(db: Session = Depends(get_db)):
+    return db.query(UsersTargetWakingPeriod).all()
+
+@app.get("/recommendations/")
+def get_recommendations(db: Session = Depends(get_db)):
+    return db.query(RecommendationsCaffeine).all()
+
+@app.get("/alertness_data/")
+def get_alertness_data(db: Session = Depends(get_db)):
+    return db.query(AlertnessDataForVisualization).all()
+
+# @app.get("/device_heart_rate/")
+# def get_device_heart_rate_data(db: Session = Depends(get_db)):
+#     return db.query(DeviceHeartRateData).all()
+
+# @app.get("/device_xyz_time/")
+# def get_device_xyz_time(db: Session = Depends(get_db)):
+#     return db.query(DeviceXYZTimeData).all()
+
+
+# ====================== 以下是 DEVICE 的資料批量傳送端口====================================
+
+# ================== 批量寫入 Heart Rate ==================
+@app.post("/device/heart_rate/bulk", response_model=list[schemas.DeviceHeartRateResponse])
+def create_heart_rate_bulk(payload: schemas.BulkHeartRate, db: Session = Depends(get_db)):
+    objs = [models.DeviceHeartRate(**record.dict()) for record in payload.records]
+    db.add_all(objs)
     db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+    for obj in objs:
+        db.refresh(obj)
+    return objs
+
+
+@app.get("/device/heart_rate", response_model=list[schemas.DeviceHeartRateResponse])
+def get_heart_rate(db: Session = Depends(get_db)):
+    return db.query(models.DeviceHeartRate).all()
+
+
+# ================== 批量寫入 XYZ Time ==================
+@app.post("/device/xyz_time/bulk", response_model=list[schemas.DeviceXYZTimeResponse])
+def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get_db)):
+    objs = [models.DeviceXYZTime(**record.dict()) for record in payload.records]
+    db.add_all(objs)
+    db.commit()
+    for obj in objs:
+        db.refresh(obj)
+    return objs
+
+
+@app.get("/device/xyz_time", response_model=list[schemas.DeviceXYZTimeResponse])
+def get_xyz_time(db: Session = Depends(get_db)):
+    return db.query(models.DeviceXYZTime).all()
