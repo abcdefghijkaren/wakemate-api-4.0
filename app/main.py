@@ -176,12 +176,26 @@ def get_heart_rate(db: Session = Depends(get_db)):
 # ================== 批量寫入 XYZ Time ==================
 @app.post("/device/xyz_time/bulk", response_model=list[schemas.DeviceXYZTimeResponse])
 def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get_db)):
-    objs = [models.DeviceXYZTimeData(**record.dict()) for record in payload.records]
-    db.add_all(objs)
-    db.commit()
-    for obj in objs:
-        db.refresh(obj)
-    return objs
+    try:
+        objs = []
+        for record in payload.records:
+            # 直接用字串，不做任何轉換
+            obj = models.DeviceXYZTimeData(
+                timestamp=record.timestamp,
+                x=record.x,
+                y=record.y,
+                z=record.z,
+                user_id=record.user_id
+            )
+            objs.append(obj)
+        db.add_all(objs)
+        db.commit()
+        for obj in objs:
+            db.refresh(obj)
+        return objs
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"寫入失敗: {str(e)}")
 
 
 @app.get("/device/xyz_time", response_model=list[schemas.DeviceXYZTimeResponse])
