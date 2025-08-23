@@ -92,14 +92,14 @@ class DeviceHeartRateResponse(DeviceHeartRateBase):
 
 # ========== XYZ Time ==========
 class DeviceXYZTimeBase(BaseModel):
-    timestamp: time
+    timestamp: datetime
     x: float
     y: float
     z: float
     user_id: UUID
 
 class DeviceXYZTimeDataCreate(DeviceXYZTimeBase):
-    timestamp: time
+    timestamp: datetime
     x: float
     y: float
     z: float

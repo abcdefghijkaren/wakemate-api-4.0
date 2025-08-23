@@ -176,7 +176,7 @@ def get_heart_rate(db: Session = Depends(get_db)):
 # ================== 批量寫入 XYZ Time ==================
 @app.post("/device/xyz_time/bulk", response_model=list[schemas.DeviceXYZTimeResponse])
 def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get_db)):
-    objs = [models.DeviceXYZTime(**record.dict()) for record in payload.records]
+    objs = [models.DeviceXYZTimeData(**record.dict()) for record in payload.records]
     db.add_all(objs)
     db.commit()
     for obj in objs:
@@ -186,4 +186,4 @@ def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get
 
 @app.get("/device/xyz_time", response_model=list[schemas.DeviceXYZTimeResponse])
 def get_xyz_time(db: Session = Depends(get_db)):
-    return db.query(models.DeviceXYZTime).all()
+    return db.query(models.DeviceXYZTimeData).all()

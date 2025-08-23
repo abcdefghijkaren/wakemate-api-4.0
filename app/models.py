@@ -128,7 +128,8 @@ class DeviceXYZTimeData(Base):
     __tablename__ = "device_xyz_time"
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(Time(timezone=False), nullable=False)  # 只有時間，無日期
+    # 使用完整的 timestamp（包含日期+時間+毫秒）
+    timestamp = Column(DateTime(timezone=True), nullable=False)
     x = Column(Float, nullable=False)
     y = Column(Float, nullable=False)
     z = Column(Float, nullable=False)
