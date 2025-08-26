@@ -128,9 +128,9 @@ class DeviceXYZTimeData(Base):
     __tablename__ = "device_xyz_time"
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(String, nullable=False)  # 改成字串，原始格式直接存
-    x = Column(String, nullable=False)          # 改字串
-    y = Column(String, nullable=False)          # 改字串
-    z = Column(String, nullable=False)          # 改字串
+    timestamp = Column(DateTime(timezone=True), nullable=False)  # TIMESTAMP WITH TIME ZONE
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    z = Column(Float, nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

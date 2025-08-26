@@ -92,17 +92,17 @@ class DeviceHeartRateResponse(DeviceHeartRateBase):
 
 # ========== XYZ Time ==========
 class DeviceXYZTimeBase(BaseModel):
-    timestamp: str
-    x: str
-    y: str
-    z: str
+    timestamp: datetime   # 直接用 datetime，pydantic 會幫忙轉換
+    x: float
+    y: float
+    z: float
     user_id: Optional[UUID] = None
 
 class DeviceXYZTimeDataCreate(DeviceXYZTimeBase):
-    timestamp: str
-    x: str
-    y: str
-    z: str
+    timestamp: datetime   # 直接用 datetime，pydantic 會幫忙轉換
+    x: float
+    y: float
+    z: float
     user_id: Optional[UUID] = None
     
 class DeviceXYZTimeResponse(DeviceXYZTimeBase):
