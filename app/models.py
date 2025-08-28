@@ -29,18 +29,6 @@ class User(Base):
     alertness_data = relationship("AlertnessDataForVisualization", back_populates="user")
 
 
-class UsersTargetWakingPeriod(Base):
-    __tablename__ = "users_target_waking_period"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    target_start_time = Column(Time(timezone=True), nullable=False)
-    target_end_time = Column(Time(timezone=True), nullable=False)
-    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-
-    user = relationship("User", back_populates="waking_periods")
-
-
 class UsersRealSleepData(Base):
     __tablename__ = "users_real_sleep_data"
 
@@ -51,6 +39,18 @@ class UsersRealSleepData(Base):
     saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="sleep_data")
+
+
+class UsersTargetWakingPeriod(Base):
+    __tablename__ = "users_target_waking_period"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    target_start_time = Column(Time(timezone=True), nullable=False)
+    target_end_time = Column(Time(timezone=True), nullable=False)
+    saved_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="waking_periods")
 
 
 class UsersRealTimeIntake(Base):
