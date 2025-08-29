@@ -85,7 +85,7 @@ class DeviceHeartRateDataCreate(DeviceHeartRateBase):
 
 class DeviceHeartRateResponse(DeviceHeartRateBase):
     id: int
-    saved_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -107,7 +107,7 @@ class DeviceXYZTimeDataCreate(DeviceXYZTimeBase):
     
 class DeviceXYZTimeResponse(DeviceXYZTimeBase):
     id: int
-    saved_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
