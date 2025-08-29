@@ -100,11 +100,12 @@ class AlertnessDataForVisualization(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     timestamp = Column(DateTime(timezone=True), nullable=False)
     awake = Column(Boolean, nullable=False)
-    g_PD = Column(Float, nullable=False)
+    g_PD_rec = Column(Float, nullable=False)
+    g_PD_real = Column(Float, nullable=False)
     P0_values = Column(Float, nullable=False)
-    P_t_caffeine = Column(Float, nullable=False)
-    P_t_no_caffeine = Column(Float, nullable=False)
-    P_t_real = Column(Float, nullable=False)
+    P_t_caffeine = Column(Float, nullable=True)  # 睡眠時段可 NULL
+    P_t_no_caffeine = Column(Float, nullable=True)
+    P_t_real = Column(Float, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="alertness_data")

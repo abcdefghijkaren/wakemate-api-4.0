@@ -58,7 +58,8 @@ class AlertnessDataCreate(BaseModel):
     user_id: UUID
     timestamp: datetime
     awake: bool
-    g_PD: float
+    g_PD_rec: float
+    g_PD_real: float
     P0_values: float
     P_t_caffeine: float
     P_t_no_caffeine: float
