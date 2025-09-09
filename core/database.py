@@ -1,4 +1,4 @@
-# 資料庫連接和操作的封裝 database.py
+# core/database.py資料庫連接和操作的封裝 
 
 import os
 import psycopg2

@@ -9,10 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4, UUID
 from passlib.context import CryptContext
 from .database import engine, SessionLocal
+from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+
+# 計算模組
+from core.caffeine_recommendation import run_caffeine_recommendation
+from core.alertness_data import run_alertness_data
+from core.database import get_db_connection
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 # 依賴注入：取得 DB session
 def get_db():
@@ -31,6 +40,35 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
+
+# ------- 封裝共用觸發邏輯 -------
+# 即時觸發計算
+def trigger_calculation(user_id: UUID):
+    try:
+        conn = get_db_connection()
+        run_caffeine_recommendation(conn, user_id)
+        run_alertness_data(conn, user_id)
+        conn.close()
+        return {"status": "ok", "message": f"calculation finished for {user_id}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# Scheduler 每小時補算
+def scheduled_job():
+    conn = get_db_connection()
+    try:
+        run_caffeine_recommendation(conn)  # 全部使用者
+        run_alertness_data(conn)
+    finally:
+        conn.close()
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(scheduled_job, "interval", hours=1)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
+
+
 @app.get("/ping")
 def ping(db: Session = Depends(get_db)):
     try:
@@ -40,7 +78,7 @@ def ping(db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 
-# ========== 新增資料 ==========
+# ========== API新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     # 檢查 email 是否已存在
@@ -61,36 +99,60 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user  # 自動轉換為 UserResponse
 
 @app.post("/users_sleep/")
-def create_user_sleep(data: UsersRealSleepDataCreate, db: Session = Depends(get_db)):
-    entry = UsersRealSleepData(**data.dict())
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depends(get_db)):
+    try:
+        entry = models.UsersRealSleepData(**data.dict())
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        calc_result = trigger_calculation(data.user_id)
+        return {"status": "success", "id": entry.id, "calculation": calc_result}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/users_wake/")
-def create_user_wake(data: UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):
-    entry = UsersTargetWakingPeriod(**data.dict())
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):
+    try:
+        entry = models.UsersTargetWakingPeriod(**data.dict())
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        calc_result = trigger_calculation(data.user_id)
+        return {"status": "success", "id": entry.id, "calculation": calc_result}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/users_intake/")
-def create_user_intake(data: UsersRealTimeIntakeCreate, db: Session = Depends(get_db)):
-    entry = UsersRealTimeIntake(**data.dict())
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+def create_user_intake(data: schemas.UsersCaffeineIntakeCreate, db: Session = Depends(get_db)):
+    try:
+        entry = models.UsersCaffeineIntake(**data.dict())
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        calc_result = trigger_calculation(data.user_id)
+        return {"status": "success", "id": entry.id, "calculation": calc_result}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/users_pvt/")
-def create_user_pvt(data: UsersPVTResultsCreate, db: Session = Depends(get_db)):
-    entry = UsersPVTResults(**data.dict())
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+def create_user_pvt(data: schemas.UsersPvtTestCreate, db: Session = Depends(get_db)):
+    try:
+        entry = models.UsersPvtTest(**data.dict())
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        calc_result = trigger_calculation(data.user_id)
+        return {"status": "success", "id": entry.id, "calculation": calc_result}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/alertness_data/")
 def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_db)):
@@ -100,24 +162,12 @@ def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_d
     db.refresh(entry)
     return {"status": "success", "id": entry.id}
 
-# @app.post("/device_heart_rate/")
-# def create_device_heart_rate(data: DeviceHeartRateDataCreate, db: Session = Depends(get_db)):
-#     entry = DeviceHeartRateData(**data.dict())
-#     db.add(entry)
-#     db.commit()
-#     db.refresh(entry)
-#     return {"status": "success", "id": entry.id}
-
-# @app.post("/device_xyz_time/")
-# def create_device_xyz_time(data: DeviceXYZTimeDataCreate, db: Session = Depends(get_db)):
-#     entry = DeviceXYZTimeData(**data.dict())
-#     db.add(entry)
-#     db.commit()
-#     db.refresh(entry)
-#     return {"status": "success", "id": entry.id}
-
 
 # ========== 取得資料 ==========
+@app.get("/")
+def read_root():
+    return {"message": "API is running with APScheduler + real-time triggers"}
+
 @app.get("/users/")
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
@@ -163,14 +213,6 @@ def get_alertness_data(user_id: UUID = Query(None), db: Session = Depends(get_db
     if user_id:
         query = query.filter(AlertnessDataForVisualization.user_id == user_id)
     return query.all()
-
-# @app.get("/device_heart_rate/")
-# def get_device_heart_rate_data(db: Session = Depends(get_db)):
-#     return db.query(DeviceHeartRateData).all()
-
-# @app.get("/device_xyz_time/")
-# def get_device_xyz_time(db: Session = Depends(get_db)):
-#     return db.query(DeviceXYZTimeData).all()
 
 
 # ====================== 以下是 DEVICE 的資料批量傳送端口====================================
