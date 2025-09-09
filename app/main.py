@@ -1,12 +1,12 @@
 # app/main.py
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app import models, schemas
 from app.models import User, UsersTargetWakingPeriod, UsersRealSleepData, UsersRealTimeIntake, UsersPVTResults, RecommendationsCaffeine, AlertnessDataForVisualization, DeviceHeartRateData, DeviceXYZTimeData
 from app.schemas import UserCreate, UsersTargetWakingPeriodCreate, UsersRealSleepDataCreate, UsersRealTimeIntakeCreate, UsersPVTResultsCreate, AlertnessDataCreate, UserResponse, DeviceHeartRateDataCreate, DeviceXYZTimeDataCreate
 from fastapi.middleware.cors import CORSMiddleware
-from uuid import uuid4
+from uuid import uuid4, UUID
 from passlib.context import CryptContext
 from .database import engine, SessionLocal
 
@@ -123,28 +123,46 @@ def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
 
 @app.get("/users_sleep/")
-def get_sleep_data(db: Session = Depends(get_db)):
-    return db.query(UsersRealSleepData).all()
+def get_sleep_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersRealSleepData)
+    if user_id:
+        query = query.filter(UsersRealSleepData.user_id == user_id)
+    return query.all()
 
 @app.get("/users_wake/")
-def get_wake_target(db: Session = Depends(get_db)):
-    return db.query(UsersTargetWakingPeriod).all()
+def get_wake_target(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersTargetWakingPeriod)
+    if user_id:
+        query = query.filter(UsersTargetWakingPeriod.user_id == user_id)
+    return query.all()
 
 @app.get("/users_intake/")
-def get_intake_data(db: Session = Depends(get_db)):
-    return db.query(UsersRealTimeIntake).all()
+def get_intake_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersRealTimeIntake)
+    if user_id:
+        query = query.filter(UsersRealTimeIntake.user_id == user_id)
+    return query.all()
 
 @app.get("/users_pvt/")
-def get_pvt_results(db: Session = Depends(get_db)):
-    return db.query(UsersPVTResults).all()
+def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersPVTResults)
+    if user_id:
+        query = query.filter(UsersPVTResults.user_id == user_id)
+    return query.all()
 
 @app.get("/recommendations/")
-def get_recommendations(db: Session = Depends(get_db)):
-    return db.query(RecommendationsCaffeine).all()
+def get_recommendations(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(RecommendationsCaffeine)
+    if user_id:
+        query = query.filter(RecommendationsCaffeine.user_id == user_id)
+    return query.all()
 
 @app.get("/alertness_data/")
-def get_alertness_data(db: Session = Depends(get_db)):
-    return db.query(AlertnessDataForVisualization).all()
+def get_alertness_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(AlertnessDataForVisualization)
+    if user_id:
+        query = query.filter(AlertnessDataForVisualization.user_id == user_id)
+    return query.all()
 
 # @app.get("/device_heart_rate/")
 # def get_device_heart_rate_data(db: Session = Depends(get_db)):
