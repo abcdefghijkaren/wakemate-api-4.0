@@ -129,7 +129,7 @@ def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = 
 @app.post("/users_intake/")
 def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = Depends(get_db)):
     try:
-        entry = models.UsersCaffeineIntake(**data.dict())
+        entry = models.UsersRealTimeIntake(**data.dict())
         db.add(entry)
         db.commit()
         db.refresh(entry)
@@ -141,9 +141,9 @@ def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = De
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/users_pvt/")
-def create_user_pvt(data: schemas.UsersPvtTestCreate, db: Session = Depends(get_db)):
+def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(get_db)):
     try:
-        entry = models.UsersPvtTest(**data.dict())
+        entry = models.UsersPVTResults(**data.dict())
         db.add(entry)
         db.commit()
         db.refresh(entry)
