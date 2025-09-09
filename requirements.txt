@@ -5,6 +5,6 @@ python-dotenv==1.0.1
 passlib[bcrypt]==1.7.4
 email-validator
 SQLAlchemy==2.0.32
-python-dotenv==1.0.1
 pytz==2024.1
 numpy==1.26.4
+apscheduler==3.10.4
