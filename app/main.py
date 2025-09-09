@@ -29,23 +29,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4, UUID
 from passlib.context import CryptContext
 from .database import engine, SessionLocal
+from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-import logging
 
 # 計算模組
 from core.caffeine_recommendation import run_caffeine_recommendation
 from core.alertness_data import run_alertness_data
 from core.database import get_db_connection
 
-# ---------------- 日誌設定 ----------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-# ---------------- 初始化 ----------------
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -71,18 +63,15 @@ app.add_middleware(
 
 
 # ------- 封裝共用觸發邏輯 -------
+# 即時觸發計算
 def trigger_calculation(user_id: UUID):
-    """執行咖啡因與清醒度計算"""
     try:
-        logger.info(f"開始觸發運算：user_id={user_id}")
         conn = get_db_connection()
         run_caffeine_recommendation(conn, user_id)
         run_alertness_data(conn, user_id)
         conn.close()
-        logger.info(f"✅ 運算完成：user_id={user_id}")
         return {"status": "ok", "message": f"calculation finished for {user_id}"}
     except Exception as e:
-        logger.error(f"❌ 運算失敗：user_id={user_id}, error={str(e)}")
         return {"status": "error", "message": str(e)}
 
 
@@ -90,12 +79,8 @@ def trigger_calculation(user_id: UUID):
 def scheduled_job():
     conn = get_db_connection()
     try:
-        logger.info("執行排程運算（全部使用者）")
-        run_caffeine_recommendation(conn)
+        run_caffeine_recommendation(conn)  # 全部使用者
         run_alertness_data(conn)
-        logger.info("✅ 排程運算完成")
-    except Exception as e:
-        logger.error(f"❌ 排程運算失敗：{str(e)}")
     finally:
         conn.close()
 
@@ -112,30 +97,25 @@ def ping(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         return {"status": "success", "message": "連線成功 ✅"}
     except Exception as e:
-        logger.error(f"資料庫連線錯誤: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 
 # ========== API新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    try:
-        db_user = db.query(User).filter(User.email == user.email).first()
-        if db_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
+    # 檢查 email 是否已存在
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-        hashed_password = pwd_context.hash(user.password)
-        new_user = User(
-            user_id=uuid4(), email=user.email, hashed_password=hashed_password, name=user.name
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ 註冊失敗: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"註冊失敗: {str(e)}")
+    hashed_password = pwd_context.hash(user.password)
+    new_user = User(
+        user_id=uuid4(), email=user.email, hashed_password=hashed_password, name=user.name
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user  # 自動轉換為 UserResponse
 
 
 @app.post("/users_sleep/")
@@ -146,12 +126,12 @@ def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depe
         db.commit()
         db.refresh(entry)
 
+        # 即時觸發運算
         calc_result = trigger_calculation(entry.user_id)
         return {"status": "success", "id": entry.id, "calculation": calc_result}
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ 新增睡眠資料失敗: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"新增睡眠資料失敗: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/users_wake/")
@@ -162,12 +142,12 @@ def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = 
         db.commit()
         db.refresh(entry)
 
+        # 即時觸發運算
         calc_result = trigger_calculation(entry.user_id)
         return {"status": "success", "id": entry.id, "calculation": calc_result}
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ 新增清醒目標失敗: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"新增清醒目標失敗: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/users_intake/")
@@ -178,12 +158,12 @@ def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = De
         db.commit()
         db.refresh(entry)
 
+        # 即時觸發運算
         calc_result = trigger_calculation(entry.user_id)
         return {"status": "success", "id": entry.id, "calculation": calc_result}
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ 新增咖啡因攝取資料失敗: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"新增咖啡因攝取資料失敗: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/users_pvt/")
@@ -198,5 +178,110 @@ def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(g
         return {"status": "success", "id": entry.id, "calculation": calc_result}
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ 新增PVT資料失敗: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"新增PVT資料失敗: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/alertness_data/")
+def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_db)):
+    entry = AlertnessDataForVisualization(**data.dict())
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"status": "success", "id": entry.id}
+
+
+# ========== 取得資料 ==========
+@app.get("/")
+def read_root():
+    return {"message": "API is running with APScheduler + real-time triggers"}
+
+
+@app.get("/users/")
+def get_users(db: Session = Depends(get_db)):
+    return db.query(User).all()
+
+
+@app.get("/users_sleep/")
+def get_sleep_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersRealSleepData)
+    if user_id:
+        query = query.filter(UsersRealSleepData.user_id == user_id)
+    return query.all()
+
+
+@app.get("/users_wake/")
+def get_wake_target(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersTargetWakingPeriod)
+    if user_id:
+        query = query.filter(UsersTargetWakingPeriod.user_id == user_id)
+    return query.all()
+
+
+@app.get("/users_intake/")
+def get_intake_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersRealTimeIntake)
+    if user_id:
+        query = query.filter(UsersRealTimeIntake.user_id == user_id)
+    return query.all()
+
+
+@app.get("/users_pvt/")
+def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersPVTResults)
+    if user_id:
+        query = query.filter(UsersPVTResults.user_id == user_id)
+    return query.all()
+
+
+@app.get("/recommendations/")
+def get_recommendations(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(RecommendationsCaffeine)
+    if user_id:
+        query = query.filter(RecommendationsCaffeine.user_id == user_id)
+    return query.all()
+
+
+@app.get("/alertness_data/")
+def get_alertness_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(AlertnessDataForVisualization)
+    if user_id:
+        query = query.filter(AlertnessDataForVisualization.user_id == user_id)
+    return query.all()
+
+
+# ====================== 以下是 DEVICE 的資料批量傳送端口====================================
+
+# ================== 批量寫入 Heart Rate ==================
+@app.post("/device/heart_rate/bulk", response_model=list[schemas.DeviceHeartRateResponse])
+def create_heart_rate_bulk(payload: schemas.BulkHeartRate, db: Session = Depends(get_db)):
+    objs = [models.DeviceHeartRate(**record.dict()) for record in payload.records]
+    db.add_all(objs)
+    db.commit()
+    for obj in objs:
+        db.refresh(obj)
+    return objs
+
+
+@app.get("/device/heart_rate", response_model=list[schemas.DeviceHeartRateResponse])
+def get_heart_rate(db: Session = Depends(get_db)):
+    return db.query(models.DeviceHeartRate).all()
+
+
+# ================== 批量寫入 XYZ Time ==================
+@app.post("/device/xyz_time/bulk", response_model=list[schemas.DeviceXYZTimeResponse])
+def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get_db)):
+    try:
+        objs = [models.DeviceXYZTimeData(**record.dict()) for record in payload.records]
+        db.add_all(objs)
+        db.commit()
+        for obj in objs:
+            db.refresh(obj)
+        return objs
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"寫入失敗: {str(e)}")
+
+
+@app.get("/device/xyz_time", response_model=list[schemas.DeviceXYZTimeResponse])
+def get_xyz_time(db: Session = Depends(get_db)):
+    return db.query(models.DeviceXYZTimeData).all()
