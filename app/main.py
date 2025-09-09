@@ -127,7 +127,7 @@ def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = 
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/users_intake/")
-def create_user_intake(data: schemas.UsersCaffeineIntakeCreate, db: Session = Depends(get_db)):
+def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = Depends(get_db)):
     try:
         entry = models.UsersCaffeineIntake(**data.dict())
         db.add(entry)
