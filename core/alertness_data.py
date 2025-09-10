@@ -173,12 +173,12 @@ def run_alertness_data(conn):
             for arr, g_arr in ((P_t_caffeine, g_PD_rec), (P_t_no_caffeine, g_PD_rec), (P_t_real, g_PD_real)):
                 arr[~awake_flags] = np.nan
 
-            # 刪除舊 snapshot
+            # 刪除舊 snapshot（整個 user 全部清空）
             cur.execute("""
                 DELETE FROM alertness_data_for_visualization
                 WHERE user_id = %s
-                  AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
-            """, (uid, latest_source_ts))
+            """, (uid,))
+
 
             # 插入資料庫
             insert_rows = []
