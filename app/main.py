@@ -64,16 +64,19 @@ app.add_middleware(
 
 # ------- 封裝共用觸發邏輯 -------
 # 即時觸發計算
-def trigger_calculation(user_id: UUID):
+def trigger_calculation(triggered_by: UUID):
     try:
         conn = get_db_connection()
-        run_caffeine_recommendation(conn, user_id)
-        run_alertness_data(conn, user_id)
+        # 批次跑，內部會自動判斷每個 user_id 是否需要更新
+        run_caffeine_recommendation(conn)
+        run_alertness_data(conn)
         conn.close()
-        return {"status": "ok", "message": f"calculation finished for {user_id}"}
+        return {
+            "status": "ok",
+            "message": f"calculation batch finished (triggered by user {triggered_by})"
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
 
 # Scheduler 每小時補算
 def scheduled_job():
@@ -126,12 +129,13 @@ def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depe
         db.commit()
         db.refresh(entry)
 
-        # 即時觸發運算
+        # 即時觸發「批次」運算
         calc_result = trigger_calculation(entry.user_id)
         return {"status": "success", "id": entry.id, "calculation": calc_result}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 @app.post("/users_wake/")
