@@ -8,7 +8,10 @@ from typing import List, Optional
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
-    password: str  # 新增
+    password: str
+    gender: str
+    age:int
+    bmi:int
 
 class UserResponse(BaseModel):
     user_id: UUID
@@ -46,6 +49,7 @@ class UsersPVTResultsCreate(BaseModel):
     false_starts: int
     test_at: datetime
     device: str
+    kss_level: int
 
 # --- 建議攝取資訊 ---
 class RecommendationsCaffeineCreate(BaseModel):

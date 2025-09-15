@@ -19,6 +19,9 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    gender = name = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    bmi = Column(Integer, nullable=True)
 
     # Relationships
     waking_periods = relationship("UsersTargetWakingPeriod", back_populates="user")
@@ -77,6 +80,7 @@ class UsersPVTResults(Base):
     test_at = Column(DateTime(timezone=True), nullable=False)
     device = Column(String, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    kss_level = Column(Integer, nullable=True)
 
     user = relationship("User", back_populates="pvt_results")
 
