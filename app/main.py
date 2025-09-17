@@ -5,8 +5,9 @@ from sqlalchemy import text
 from app import models, schemas
 from app.models import (
     User,
-    UsersTargetWakingPeriod,
+    UsersBodyInfo,
     UsersRealSleepData,
+    UsersTargetWakingPeriod,
     UsersRealTimeIntake,
     UsersPVTResults,
     RecommendationsCaffeine,
@@ -16,8 +17,9 @@ from app.models import (
 )
 from app.schemas import (
     UserCreate,
-    UsersTargetWakingPeriodCreate,
+    UsersBodyInfoCreate,
     UsersRealSleepDataCreate,
+    UsersTargetWakingPeriodCreate,
     UsersRealTimeIntakeCreate,
     UsersPVTResultsCreate,
     AlertnessDataCreate,
@@ -120,6 +122,13 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user  # 自動轉換為 UserResponse
 
+@app.post("/users_body_info/")
+def create_users_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_db)):
+    entry = UsersBodyInfo(**data.dict())
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"status": "success", "id": entry.id}
 
 @app.post("/users_sleep/")
 def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depends(get_db)):

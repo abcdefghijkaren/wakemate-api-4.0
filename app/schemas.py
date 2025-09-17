@@ -22,6 +22,16 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True  # 替代 orm_mode = True
 
+# --- 使用者身體數據(性別、年齡、身高、體重、bmi) ---
+class UsersBodyInfoCreate(BaseModel):
+    user_id: UUID
+    password: str
+    gender: str
+    age:int
+    height: float
+    weight: float
+    bmi: float
+
 # --- 使用者實際睡眠資料 ---
 class UsersRealSleepDataCreate(BaseModel):
     user_id: UUID

@@ -19,9 +19,6 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    gender = name = Column(String, nullable=True)
-    age = Column(Integer, nullable=True)
-    bmi = Column(Integer, nullable=True)
 
     # Relationships
     waking_periods = relationship("UsersTargetWakingPeriod", back_populates="user")
@@ -31,6 +28,19 @@ class User(Base):
     recommendations = relationship("RecommendationsCaffeine", back_populates="user")
     alertness_data = relationship("AlertnessDataForVisualization", back_populates="user")
 
+class UsersBodyInfo(Base):
+    __tablename__ = "users_body_info"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    gender = Column(String, nullable=True)
+    age = Column(Integer, nullable=True)
+    height = Column(Float, nullable=True)
+    weight = Column(Float, nullable=True)
+    bmi = Column(Integer, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="body_info")
 
 class UsersRealSleepData(Base):
     __tablename__ = "users_real_sleep_data"
