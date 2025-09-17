@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert
 from app import models, schemas
 from app.models import (
     User,
@@ -124,12 +125,26 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/users_body_info/")
-def create_users_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_db)):
-    entry = UsersBodyInfo(**data.dict())
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return {"status": "success", "id": entry.id}
+def upsert_user_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_db)):
+    try:
+        stmt = insert(UsersBodyInfo).values(**data.dict())
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[UsersBodyInfo.user_id],  # 用 user_id 作為唯一 key
+            set_={
+                "gender": stmt.excluded.gender,
+                "age": stmt.excluded.age,
+                "height": stmt.excluded.height,
+                "weight": stmt.excluded.weight,
+                "bmi": stmt.excluded.bmi,
+                "updated_at": stmt.excluded.updated_at,
+            },
+        )
+        db.execute(stmt)
+        db.commit()
+        return {"status": "success", "message": f"Body info for {data.user_id} updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/users_sleep/")
