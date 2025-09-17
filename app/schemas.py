@@ -25,7 +25,6 @@ class UserResponse(BaseModel):
 # --- 使用者身體數據(性別、年齡、身高、體重、bmi) ---
 class UsersBodyInfoCreate(BaseModel):
     user_id: UUID
-    password: str
     gender: str
     age:int
     height: float
