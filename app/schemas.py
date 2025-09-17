@@ -9,9 +9,6 @@ class UserCreate(BaseModel):
     name: str
     email: EmailStr
     password: str
-    gender: str
-    age:int
-    bmi:int
 
 class UserResponse(BaseModel):
     user_id: UUID
