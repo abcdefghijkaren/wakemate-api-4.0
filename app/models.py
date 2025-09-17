@@ -32,13 +32,12 @@ class User(Base):
 class UsersBodyInfo(Base):
     __tablename__ = "users_body_info"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), primary_key=True)
     gender = Column(String, nullable=True)
     age = Column(Integer, nullable=True)
     height = Column(Float, nullable=True)
     weight = Column(Float, nullable=True)
-    bmi = Column(Integer, nullable=True)
+    bmi = Column(Float, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="body_info")
