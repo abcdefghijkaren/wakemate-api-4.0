@@ -21,8 +21,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    waking_periods = relationship("UsersTargetWakingPeriod", back_populates="user")
+    body_info = relationship("UsersBodyInfo", back_populates="user")
     sleep_data = relationship("UsersRealSleepData", back_populates="user")
+    waking_periods = relationship("UsersTargetWakingPeriod", back_populates="user")
     intake_data = relationship("UsersRealTimeIntake", back_populates="user")
     pvt_results = relationship("UsersPVTResults", back_populates="user")
     recommendations = relationship("RecommendationsCaffeine", back_populates="user")
