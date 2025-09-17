@@ -122,6 +122,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user  # 自動轉換為 UserResponse
 
+
 @app.post("/users_body_info/")
 def create_users_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_db)):
     entry = UsersBodyInfo(**data.dict())
@@ -129,6 +130,7 @@ def create_users_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(entry)
     return {"status": "success", "id": entry.id}
+
 
 @app.post("/users_sleep/")
 def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depends(get_db)):
@@ -212,6 +214,14 @@ def read_root():
 @app.get("/users/")
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
+
+
+@app.get("/users_body_info/")
+def get_users_body_info(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UsersBodyInfo)
+    if user_id:
+        query = query.filter(UsersBodyInfo.user_id == user_id)
+    return query.all()
 
 
 @app.get("/users_sleep/")
