@@ -125,6 +125,27 @@ class AlertnessDataForVisualization(Base):
     user = relationship("User", back_populates="alertness_data")
 
 
+class UsersParams(Base):
+    __tablename__ = "users_params"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), primary_key=True)
+    m_c = Column(Float, nullable=False, default=1.0)
+    k_a = Column(Float, nullable=False, default=1.25)
+    k_c = Column(Float, nullable=False, default=0.20)
+    trait_alertness = Column(Float, nullable=False, default=0.0)
+    p0_value = Column(Float, nullable=False, default=270.0)
+
+    last_trait_update = Column(DateTime(timezone=True), nullable=True)
+    last_kc_update = Column(DateTime(timezone=True), nullable=True)
+
+    pvt_count_7d = Column(Integer, nullable=False, default=0)
+    pvt_avg_7d = Column(Float, nullable=True)
+
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User")
+
+
 class DeviceHeartRateData(Base):
     __tablename__ = "device_heart_rate_data"
 

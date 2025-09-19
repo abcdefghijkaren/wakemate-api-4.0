@@ -5,10 +5,10 @@ from datetime import timedelta
 from typing import Dict, Optional
 
 ALERTNESS_THRESHOLD = 270.0  # 目標上限（ms）
-FORBIDDEN_HOURS_BEFORE_SLEEP = 6  # 睡前禁用時數
-DOSE_STEP = 25.0              # 劑量粒度（四捨五入到 25mg）
-MAX_DAILY_DOSE = 300.0        # 一天上限（mg）
-WINDOW_HOURS = 2              # 劑量要能壓制的視窗長度（以小時數計）
+FORBIDDEN_HOURS_BEFORE_SLEEP = 6
+DOSE_STEP = 25.0
+MAX_DAILY_DOSE = 300.0
+WINDOW_HOURS = 2
 
 
 def _get_distinct_user_ids(cursor):
@@ -117,20 +117,28 @@ def _apply_dose_to_gpd(
 
 def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
-    若 user_params_map 為 None，會自動從 users_params 表載入參數。
-    user_params_map 格式: { user_id: {"M_c": float, "k_a": float, "k_c": float}, ... }
+    user_params_map 格式: 
+      { user_id: {"M_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
     """
     cur = conn.cursor()
     try:
-        # 若呼叫方沒給參數 map，就在此載入（讓函式兼容兩種呼叫）
+        # 載入使用者參數
         if user_params_map is None:
             user_params_map = {}
             try:
-                cur.execute("SELECT user_id, M_c, k_a, k_c FROM users_params;")
+                cur.execute("""
+                    SELECT user_id, M_c, k_a, k_c, trait_alertness, p0_value 
+                    FROM users_params;
+                """)
                 for r in cur.fetchall():
-                    user_params_map[r[0]] = {"M_c": float(r[1]), "k_a": float(r[2]), "k_c": float(r[3])}
+                    user_params_map[r[0]] = {
+                        "M_c": float(r[1]),
+                        "k_a": float(r[2]),
+                        "k_c": float(r[3]),
+                        "trait": float(r[4] or 0.0),
+                        "p0_value": float(r[5] or 270.0)
+                    }
             except Exception:
-                # 如果沒有 users_params 表或查詢失敗，繼續讓 model 用預設值
                 user_params_map = {}
 
         user_ids = _get_distinct_user_ids(cur)
@@ -144,8 +152,10 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             if latest_source_ts <= last_processed_ts:
                 continue
 
-            params = user_params_map.get(uid, {"M_c": 1.1, "k_a": 1.0, "k_c": 0.5})
-            M_c, k_a, k_c = params["M_c"], params["k_a"], params["k_c"]
+            params = user_params_map.get(uid, {"M_c": 1.1, "k_a": 1.0, "k_c": 0.5, "trait": 0.0, "p0_value": 270.0})
+            M_c, k_a, k_c, trait, p0_value = (
+                params["M_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
+            )
 
             # 取該使用者資料
             cur.execute("""
@@ -167,7 +177,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             if not waking_periods or not sleep_rows:
                 continue
 
-            sleep_intervals = [(r[1], r[2]) for r in sleep_rows]  # (start, end)
+            sleep_intervals = [(r[1], r[2]) for r in sleep_rows]
             recommendations = []
 
             for _, target_start_time, target_end_time in waking_periods:
@@ -181,7 +191,13 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     now_dt = target_start_time.replace(hour=h, minute=0, second=0, microsecond=0)
                     asleep = any(start <= now_dt < end for (start, end) in sleep_intervals)
                     awake_flags[h] = (not asleep)
-                    P0_values[h] = 270.0 + _sigmoid(h) if not asleep else 270.0
+
+                    if asleep:
+                        # 睡眠：固定 baseline + trait
+                        P0_values[h] = 270.0 + trait
+                    else:
+                        # 清醒：baseline + circadian + trait
+                        P0_values[h] = (270.0 + _sigmoid(h)) + trait
 
                 g_PD = np.ones_like(t, dtype=float)
                 P_t = P0_values * g_PD
