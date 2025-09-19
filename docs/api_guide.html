@@ -22,7 +22,7 @@
   </script>
 </head>
 <body>
-  <h1>Wakemate API 使用教學-2025/08/28-16:44更</h1>
+  <h1>Wakemate API 使用教學-2025/09/19-19:35更</h1>
   <p>API 文件: <a href="https://wakemate-api-4-0.onrender.com/docs#/" target="_blank">Swagger Docs</a></p>
   <p>在Step1複製完自己的user_id後，從Step2開始測試！</p>
   <p>自己編輯JSON的內容再貼上各對應端口(連結中的各個POST)。</p>
@@ -31,48 +31,48 @@
      如果回傳 <b>422 / 400</b> → 請檢查 JSON 格式或參數</p>
 
   <!-- STEP 1 -->
-<div class="endpoint">
-  <h2>STEP 1: 註冊使用者 (POST /register_user)，我已經先幫大家註冊好了，請跳過此步驟，但一定要複製以下user_id來傳送其他數據！</h2>
-  <p>建立新使用者帳號。看到成功，也就是網頁中Server response顯示Code: 200，Response body會顯示每個帳號專屬的user_id，之後的每一步都要把user_id改成自己的。</p>
-  <p>為求快速方便，我已經建好每個人的測試帳號。</p>
-  <p>請在傳送其他數據時直接貼上user_id欄位就好。</p>
+  <div class="endpoint">
+    <h2>STEP 1: 註冊使用者 (POST /register_user)，我已經先幫大家註冊好了，請跳過此步驟，但一定要複製以下user_id來傳送其他數據！</h2>
+    <p>建立新使用者帳號。看到成功，也就是網頁中Server response顯示Code: 200，Response body會顯示每個帳號專屬的user_id，之後的每一步都要把user_id改成自己的。</p>
+    <p>為求快速方便，我已經建好每個人的測試帳號。</p>
+    <p>請在傳送其他數據時直接貼上user_id欄位就好。</p>
 
-  <h3>📌 測試用 user_id：</h3>
-  <p>000-王凱琳</p>
-  <pre id="uid1">b78bf44b-b0d2-4e5f-a7fb-bd5ea7879647</pre>
-  <button onclick="copyToClipboard('uid1')">複製 user_id</button>
+    <h3>📌 測試用 user_id：</h3>
+    <p>000-王凱琳</p>
+    <pre id="uid1">b78bf44b-b0d2-4e5f-a7fb-bd5ea7879647</pre>
+    <button onclick="copyToClipboard('uid1')">複製 user_id</button>
 
-  <p>001-蔣靜盈</p>
-  <pre id="uid2">91759921-ed19-4d90-a13a-b8b7c1546239</pre>
-  <button onclick="copyToClipboard('uid2')">複製 user_id</button>
+    <p>001-蔣靜盈</p>
+    <pre id="uid2">91759921-ed19-4d90-a13a-b8b7c1546239</pre>
+    <button onclick="copyToClipboard('uid2')">複製 user_id</button>
 
-  <p>002-周思廷</p>
-  <pre id="uid3">8e3cf09f-ba4d-4a8c-a861-8e86831f071e</pre>
-  <button onclick="copyToClipboard('uid3')">複製 user_id</button>
+    <p>002-周思廷</p>
+    <pre id="uid3">8e3cf09f-ba4d-4a8c-a861-8e86831f071e</pre>
+    <button onclick="copyToClipboard('uid3')">複製 user_id</button>
 
-  <p>003-陳永祥</p>
-  <pre id="uid4">e81f7758-a144-4efb-80ef-d807eae2671f</pre>
-  <button onclick="copyToClipboard('uid4')">複製 user_id</button>
+    <p>003-陳永祥</p>
+    <pre id="uid4">e81f7758-a144-4efb-80ef-d807eae2671f</pre>
+    <button onclick="copyToClipboard('uid4')">複製 user_id</button>
 
-  <h3>---測試註冊，先跳過不用自己註冊---</h3>
-  <h3>測試 JSON</h3>
-  <pre id="json1">{
+    <h3>---測試註冊，先跳過不用自己註冊---</h3>
+    <h3>測試 JSON</h3>
+    <pre id="json1">{
   "name": "王凱琳",
   "email": "test000@example.com",
   "password": "StrongPass000!"
 }</pre>
-  <button onclick="copyToClipboard('json1')">📋 複製 JSON</button>
+    <button onclick="copyToClipboard('json1')">📋 複製 JSON</button>
 
-  <h3>curl 測試</h3>
-  <pre id="curl1">curl -X POST https://wakemate-api-4-0.onrender.com/register_user \
+    <h3>curl 測試</h3>
+    <pre id="curl1">curl -X POST https://wakemate-api-4-0.onrender.com/register_user \
 -H "Content-Type: application/json" \
 -d '{
   "name": "王凱琳",
   "email": "test000@example.com",
   "password": "StrongPass000!"
 }'</pre>
-  <button onclick="copyToClipboard('curl1')">📋 複製 curl</button>
-</div>
+    <button onclick="copyToClipboard('curl1')">📋 複製 curl</button>
+  </div>
 
 
   <!-- STEP 2 -->
@@ -142,6 +142,61 @@
 }'</pre>
     <button onclick="copyToClipboard('curl4')">📋 複製 curl</button>
   </div>
+
+  <!-- STEP 5 -->
+  <div class="endpoint">
+    <h2>STEP 5: PVT 與 KSS level 紀錄 (POST /users_pvt/)</h2>
+    <p>新增使用者的 PVT 測驗數據與 KSS 睡意等級紀錄。</p>
+    <ul>
+      <li><b>user_id</b>：使用者的唯一識別碼（從 Step 1 複製）</li>
+      <li><b>mean_rt</b>：平均反應時間 (ms)</li>
+      <li><b>lapses</b>：注意力失誤次數</li>
+      <li><b>false_starts</b>：過早反應次數</li>
+      <li><b>test_at</b>：測試完成時間 (ISO 8601 格式)</li>
+      <li><b>device</b>：測試裝置資訊（字串描述）</li>
+      <li><b>kss_level</b>：KSS 睡意等級 (1–9)</li>
+    </ul>
+
+    <h3>KSS level 說明</h3>
+    <ol>
+      <li>極度警醒（Extremely alert）</li>
+      <li>非常警醒（Very alert）</li>
+      <li>警醒（Alert）</li>
+      <li>比較警醒（Rather alert）</li>
+      <li>不太警醒但也無睏意（Neither alert nor sleepy）</li>
+      <li>有一些睏意傾向（Some signs of sleepiness）</li>
+      <li>有睏意，但是不需要努力保持清醒（Sleepy, but no effort to keep alert）</li>
+      <li>有睏意，且需要一定的努力保持清醒（Sleepy, some effort to keep alert）</li>
+      <li>非常睏倦，需要極大的努力保持清醒（Very sleepy, great effort to keep alert, fighting sleep）</li>
+    </ol>
+
+    <h3>範例 JSON</h3>
+    <pre id="json5">{
+  "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "mean_rt": 0,
+  "lapses": 0,
+  "false_starts": 0,
+  "test_at": "2025-09-19T11:28:58.476Z",
+  "device": "string",
+  "kss_level": 5
+}</pre>
+    <button onclick="copyToClipboard('json5')">📋 複製 JSON</button>
+
+    <h3>curl 測試</h3>
+    <pre id="curl5">curl -X POST https://wakemate-api-4-0.onrender.com/users_pvt/ \
+-H "Content-Type: application/json" \
+-d '{
+  "user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "mean_rt": 0,
+  "lapses": 0,
+  "false_starts": 0,
+  "test_at": "2025-09-19T11:28:58.476Z",
+  "device": "string",
+  "kss_level": 5
+}'</pre>
+    <button onclick="copyToClipboard('curl5')">📋 複製 curl</button>
+  </div>
+
 
 </body>
 </html>
