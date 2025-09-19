@@ -196,6 +196,7 @@ def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = De
         raise HTTPException(status_code=400, detail=str(e))
 
 
+from core.personalize_params import update_user_params
 @app.post("/users_pvt/")
 def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(get_db)):
     try:
@@ -205,19 +206,22 @@ def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(g
         db.refresh(entry)
 
         # 觸發個人化參數更新
-        from core.personalize_params import update_user_params
         conn = get_db_connection()
         try:
             params_update = update_user_params(conn, entry.user_id)
+        except Exception as e:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
         # 依然觸發批次計算
         calc_result = trigger_calculation(entry.user_id)
+
         return {
             "status": "success",
             "id": entry.id,
-            "params_update": params_update,
+            "params_update": params_update,  # 🔹 已包含 p0_value, kc, trait
             "calculation": calc_result
         }
 
