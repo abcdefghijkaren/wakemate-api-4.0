@@ -146,14 +146,16 @@
   <!-- STEP 5 -->
   <div class="endpoint">
     <h2>STEP 5: PVT 與 KSS level 紀錄 (POST /users_pvt/)</h2>
-    <p>新增使用者的 PVT 測驗數據與 KSS 睡意等級紀錄。</p>
+    <p>新增使用者的 PVT 測驗數據與 KSS 睡意等級紀錄，一天至少輸入2次。</p>
+    <p>反應力測試網站: <a href="https://www.arealme.com/reaction-test/zh/#/" target="_blank">Swagger Docs</a></p>
+    
     <ul>
       <li><b>user_id</b>：使用者的唯一識別碼（從 Step 1 複製）</li>
       <li><b>mean_rt</b>：平均反應時間 (ms)</li>
       <li><b>lapses</b>：注意力失誤次數</li>
       <li><b>false_starts</b>：過早反應次數</li>
       <li><b>test_at</b>：測試完成時間 (ISO 8601 格式)</li>
-      <li><b>device</b>：測試裝置資訊（字串描述）</li>
+      <li><b>device</b>：測試裝置資訊（字串描述）--可為空</li>
       <li><b>kss_level</b>：KSS 睡意等級 (1–9)</li>
     </ul>
 
