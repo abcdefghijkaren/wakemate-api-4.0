@@ -122,7 +122,7 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             rec_rows = cur.fetchall()
 
             # 讀取使用者參數（若無則使用 fallback）
-            params = user_params_map.get(uid, {"M_c": 1.1, "k_a": 1.0, "k_c": 0.5, "trait": 0.0, "p0_value": 270.0})
+            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
             M_c = params["M_c"]
             k_a = params["k_a"]
             k_c = params["k_c"]
