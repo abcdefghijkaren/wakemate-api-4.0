@@ -152,7 +152,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             if latest_source_ts <= last_processed_ts:
                 continue
 
-            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.5, "trait": 0.0, "p0_value": 270.0})
+            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
             M_c, k_a, k_c, trait, p0_value = (
                 params["M_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
             )
