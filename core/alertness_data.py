@@ -2,7 +2,7 @@
 import numpy as np
 from datetime import timedelta
 from psycopg2.extras import execute_values
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 def _get_user_ids_for_alertness(cursor):
     cursor.execute("""
@@ -36,19 +36,38 @@ def _get_last_processed_ts_for_alert(cursor, user_id):
     (ts,) = cursor.fetchone()
     return ts
 
-def run_alertness_data(conn):
+def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
+    """
+    若傳入 user_params_map，格式:
+      { user_id: {"M_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
+    若未傳入，會從 users_params 讀取所有使用者的參數並建立該 map。
+    """
     cur = conn.cursor()
     try:
+        # 載入使用者參數（與 caffeine_recommendation.py 的方式一致）
+        if user_params_map is None:
+            user_params_map = {}
+            try:
+                cur.execute("""
+                    SELECT user_id, M_c, k_a, k_c, trait_alertness, p0_value
+                    FROM users_params;
+                """)
+                for r in cur.fetchall():
+                    # r: (user_id, M_c, k_a, k_c, trait_alertness, p0_value)
+                    user_params_map[r[0]] = {
+                        "M_c": float(r[1]) if r[1] is not None else 1.1,
+                        "k_a": float(r[2]) if r[2] is not None else 1.0,
+                        "k_c": float(r[3]) if r[3] is not None else 0.5,
+                        "trait": float(r[4] or 0.0),
+                        "p0_value": float(r[5] or 270.0)
+                    }
+            except Exception:
+                user_params_map = {}
+
         user_ids = _get_user_ids_for_alertness(cur)
         if not user_ids:
             print("缺少必要的輸入資料，無法計算清醒度。")
             return
-
-        # 參數
-        M_c = 1.1
-        k_a = 1.0
-        k_c = 0.5
-        P0_base = 270.0  # 固定輸出基準
 
         def sigmoid(x, L=100, x0=14, k=0.2):
             return L / (1 + np.exp(-k * (x - x0)))
@@ -102,6 +121,14 @@ def run_alertness_data(conn):
             """, (uid,))
             rec_rows = cur.fetchall()
 
+            # 讀取使用者參數（若無則使用 fallback）
+            params = user_params_map.get(uid, {"M_c": 1.1, "k_a": 1.0, "k_c": 0.5, "trait": 0.0, "p0_value": 270.0})
+            M_c = params["M_c"]
+            k_a = params["k_a"]
+            k_c = params["k_c"]
+            trait = params.get("trait", 0.0)
+            P0_base = params.get("p0_value", 270.0)
+
             # 計算時間範圍
             min_start = min(
                 min(r[0] for r in sleep_rows),
@@ -130,10 +157,14 @@ def run_alertness_data(conn):
             P_t_no_caffeine = np.zeros(len(time_index), dtype=float)
             for i, now_dt in enumerate(time_index):
                 hour = now_dt.hour
-                P_t_no_caffeine[i] = P0_base + sigmoid(hour) if awake_flags[i] else P0_base
+                # 加上 trait（個人化偏移）
+                if awake_flags[i]:
+                    P_t_no_caffeine[i] = P0_base + sigmoid(hour) + trait
+                else:
+                    P_t_no_caffeine[i] = P0_base + trait
 
-            # ---------- P0_values (固定 270) ----------
-            P0_values = np.full(len(time_index), P0_base, dtype=float)
+            # ---------- P0_values (使用者 p0_value, 我把 trait 一併加入 baseline) ----------
+            P0_values = np.full(len(time_index), P0_base + trait, dtype=float)
 
             # ---------- g_PD_real ----------
             g_PD_real = np.ones(len(time_index), dtype=float)
