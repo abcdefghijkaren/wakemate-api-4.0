@@ -127,7 +127,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user  # 自動轉換為 UserResponse
 
 
-@app.post("/login", response_model=UserLoginResponse)
+@app.post("/login/", response_model=UserLoginResponse)
 def login_user(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user or not pwd_context.verify(user.password, db_user.hashed_password):
@@ -266,9 +266,19 @@ def read_root():
 
 
 @app.get("/users/")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
+def get_users(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(User)
+    if user_id:
+        query = query.filter(User.user_id == user_id)
+    return query.all()
 
+
+@app.get("/login/")
+def get_users_login(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(UserLogin)
+    if user_id:
+        query = query.filter(UserLogin.user_id == user_id)
+    return query.all()
 
 @app.get("/users_body_info/")
 def get_users_body_info(user_id: UUID = Query(None), db: Session = Depends(get_db)):
