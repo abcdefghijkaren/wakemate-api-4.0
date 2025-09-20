@@ -34,7 +34,7 @@ from app.schemas import (
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4, UUID
 from passlib.context import CryptContext
-from .database import engine, SessionLocal
+from .database import engine, SessionLocal, get_db
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
@@ -111,20 +111,38 @@ def ping(db: Session = Depends(get_db)):
 
 # ========== API新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # 檢查 email 是否已存在
-    db_user = db.query(User).filter(User.email == user.email).first()
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # 建立使用者
     hashed_password = pwd_context.hash(user.password)
-    new_user = User(
-        user_id=uuid4(), email=user.email, hashed_password=hashed_password, name=user.name
+    new_user = models.User(
+        user_id=uuid4(),
+        email=user.email,
+        hashed_password=hashed_password,
+        name=user.name
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return new_user  # 自動轉換為 UserResponse
+
+    # 建立對應的 users_params（帶入你指定的預設值）
+    default_params = models.UsersParams(
+        user_id=new_user.user_id,
+        m_c=1.0,
+        k_a=1.25,
+        k_c=0.20,
+        trait_alertness=0.0,
+        p0_value=270.0,
+        pvt_count_7d=0
+    )
+    db.add(default_params)
+    db.commit()
+
+    return new_user
 
 
 @app.post("/login/", response_model=UserLoginResponse)
