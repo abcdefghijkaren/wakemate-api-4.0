@@ -59,7 +59,7 @@ def _compute_precise_dose_for_hour(
     hour_idx: int,
     P0_values: np.ndarray,
     g_PD_current: np.ndarray,
-    M_c: float,
+    m_c: float,
     k_a: float,
     k_c: float,
     window_hours: int = WINDOW_HOURS,
@@ -86,7 +86,7 @@ def _compute_precise_dose_for_hour(
         if phi <= 0:
             continue
 
-        A_t = (M_c / 200.0) * (k_a / (k_a - k_c)) * phi
+        A_t = (m_c / 200.0) * (k_a / (k_a - k_c)) * phi
         required = (1.0 / R - 1.0) / A_t
         if required > best_required:
             best_required = required
@@ -101,7 +101,7 @@ def _apply_dose_to_gpd(
     g_PD: np.ndarray,
     dose_mg: float,
     hour_idx: int,
-    M_c: float,
+    m_c: float,
     k_a: float,
     k_c: float
 ) -> None:
@@ -109,7 +109,7 @@ def _apply_dose_to_gpd(
         return
     t = np.arange(len(g_PD))
     t0 = hour_idx
-    effect = 1.0 / (1.0 + (M_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
+    effect = 1.0 / (1.0 + (m_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
                     (np.exp(-k_c * (t - t0)) - np.exp(-k_a * (t - t0))))
     effect = np.where(t < t0, 1.0, effect)
     g_PD *= effect
@@ -118,7 +118,7 @@ def _apply_dose_to_gpd(
 def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
     user_params_map 格式: 
-      { user_id: {"M_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
+      { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
     """
     cur = conn.cursor()
     try:
@@ -127,12 +127,12 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             user_params_map = {}
             try:
                 cur.execute("""
-                    SELECT user_id, M_c, k_a, k_c, trait_alertness, p0_value 
+                    SELECT user_id, m_c, k_a, k_c, trait_alertness, p0_value 
                     FROM users_params;
                 """)
                 for r in cur.fetchall():
                     user_params_map[r[0]] = {
-                        "M_c": float(r[1]),
+                        "m_c": float(r[1]),
                         "k_a": float(r[2]),
                         "k_c": float(r[3]),
                         "trait": float(r[4] or 0.0),
@@ -152,9 +152,9 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             if latest_source_ts <= last_processed_ts:
                 continue
 
-            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
-            M_c, k_a, k_c, trait, p0_value = (
-                params["M_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
+            params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
+            m_c, k_a, k_c, trait, p0_value = (
+                params["m_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
             )
 
             # 取該使用者資料
@@ -229,7 +229,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                         hour_idx=hour,
                         P0_values=P0_values,
                         g_PD_current=g_PD,
-                        M_c=M_c, k_a=k_a, k_c=k_c,
+                        m_c=m_c, k_a=k_a, k_c=k_c,
                         window_hours=WINDOW_HOURS,
                         threshold=ALERTNESS_THRESHOLD
                     )
@@ -242,7 +242,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     intake_schedule.append((uid, dose_to_give, recommended_time))
                     daily_dose += dose_to_give
 
-                    _apply_dose_to_gpd(g_PD, dose_to_give, hour, M_c, k_a, k_c)
+                    _apply_dose_to_gpd(g_PD, dose_to_give, hour, m_c, k_a, k_c)
                     P_t = P0_values * g_PD
 
                 filtered = [

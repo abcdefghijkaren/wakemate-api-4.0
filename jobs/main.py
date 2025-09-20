@@ -6,20 +6,20 @@ from alertness_data import run_alertness_data
 
 def get_user_params(conn):
     """
-    從 users_params 撈取所有使用者的 M_c, k_a, k_c
-    回傳 dict: { user_id: {"M_c": x, "k_a": y, "k_c": z}, ... }
+    從 users_params 撈取所有使用者的 m_c, k_a, k_c
+    回傳 dict: { user_id: {"m_c": x, "k_a": y, "k_c": z}, ... }
     """
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT user_id, M_c, k_a, k_c
+            SELECT user_id, m_c, k_a, k_c
             FROM users_params
         """)
         rows = cur.fetchall()
         params_map = {}
-        for user_id, M_c, k_a, k_c in rows:
+        for user_id, m_c, k_a, k_c in rows:
             params_map[user_id] = {
-                "M_c": M_c,
+                "m_c": m_c,
                 "k_a": k_a,
                 "k_c": k_c
             }

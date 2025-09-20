@@ -39,7 +39,7 @@ def _get_last_processed_ts_for_alert(cursor, user_id):
 def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
     """
     若傳入 user_params_map，格式:
-      { user_id: {"M_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
+      { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
     若未傳入，會從 users_params 讀取所有使用者的參數並建立該 map。
     """
     cur = conn.cursor()
@@ -49,13 +49,13 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             user_params_map = {}
             try:
                 cur.execute("""
-                    SELECT user_id, M_c, k_a, k_c, trait_alertness, p0_value
+                    SELECT user_id, m_c, k_a, k_c, trait_alertness, p0_value
                     FROM users_params;
                 """)
                 for r in cur.fetchall():
-                    # r: (user_id, M_c, k_a, k_c, trait_alertness, p0_value)
+                    # r: (user_id, m_c, k_a, k_c, trait_alertness, p0_value)
                     user_params_map[r[0]] = {
-                        "M_c": float(r[1]) if r[1] is not None else 1.0,
+                        "m_c": float(r[1]) if r[1] is not None else 1.0,
                         "k_a": float(r[2]) if r[2] is not None else 1.25,
                         "k_c": float(r[3]) if r[3] is not None else 0.20,
                         "trait": float(r[4] or 0.0),
@@ -122,8 +122,8 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             rec_rows = cur.fetchall()
 
             # 讀取使用者參數（若無則使用 fallback）
-            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
-            M_c = params["M_c"]
+            params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
+            m_c = params["m_c"]
             k_a = params["k_a"]
             k_c = params["k_c"]
             trait = params.get("trait", 0.0)
@@ -174,7 +174,7 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                     t_0 = int((take_time - min_start).total_seconds() // 3600)
                     if t_0 >= len(t) or t_0 < -10000:
                         continue
-                    effect = 1 / (1 + (M_c * dose / 200) * (k_a / (k_a - k_c)) *
+                    effect = 1 / (1 + (m_c * dose / 200) * (k_a / (k_a - k_c)) *
                                   (np.exp(-k_c * (t - t_0)) - np.exp(-k_a * (t - t_0))))
                     effect = np.where(t < t_0, 1.0, effect)
                     g_PD_real *= effect
@@ -187,7 +187,7 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                     t_0 = int((rec_time - min_start).total_seconds() // 3600)
                     if t_0 >= len(t) or t_0 < -10000:
                         continue
-                    effect = 1 / (1 + (M_c * amt / 200) * (k_a / (k_a - k_c)) *
+                    effect = 1 / (1 + (m_c * amt / 200) * (k_a / (k_a - k_c)) *
                                   (np.exp(-k_c * (t - t_0)) - np.exp(-k_a * (t - t_0))))
                     effect = np.where(t < t_0, 1.0, effect)
                     g_PD_rec *= effect
