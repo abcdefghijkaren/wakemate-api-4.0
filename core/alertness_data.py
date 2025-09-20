@@ -55,9 +55,9 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                 for r in cur.fetchall():
                     # r: (user_id, M_c, k_a, k_c, trait_alertness, p0_value)
                     user_params_map[r[0]] = {
-                        "M_c": float(r[1]) if r[1] is not None else 1.1,
-                        "k_a": float(r[2]) if r[2] is not None else 1.0,
-                        "k_c": float(r[3]) if r[3] is not None else 0.5,
+                        "M_c": float(r[1]) if r[1] is not None else 1.0,
+                        "k_a": float(r[2]) if r[2] is not None else 1.25,
+                        "k_c": float(r[3]) if r[3] is not None else 0.20,
                         "trait": float(r[4] or 0.0),
                         "p0_value": float(r[5] or 270.0)
                     }
