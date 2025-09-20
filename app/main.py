@@ -1,8 +1,9 @@
 # app/main.py
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.sql import func
 from app import models, schemas
 from app.models import (
     User,
@@ -18,13 +19,15 @@ from app.models import (
 )
 from app.schemas import (
     UserCreate,
+    UserResponse,
+    UserLogin,
+    UserLoginResponse,
     UsersBodyInfoCreate,
     UsersRealSleepDataCreate,
     UsersTargetWakingPeriodCreate,
     UsersRealTimeIntakeCreate,
     UsersPVTResultsCreate,
     AlertnessDataCreate,
-    UserResponse,
     DeviceHeartRateDataCreate,
     DeviceXYZTimeDataCreate,
 )
@@ -122,6 +125,23 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     return new_user  # 自動轉換為 UserResponse
+
+
+@app.post("/login", response_model=UserLoginResponse)
+def login_user(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if not db_user or not pwd_context.verify(user.password, db_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    # 更新最後登入時間
+    db_user.last_login = func.now()
+    db.commit()
+    db.refresh(db_user)
+
+    return db_user
 
 
 @app.post("/users_body_info/")

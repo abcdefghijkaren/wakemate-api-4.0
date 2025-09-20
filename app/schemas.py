@@ -19,6 +19,19 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True  # 替代 orm_mode = True
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserLoginResponse(BaseModel):
+    user_id: UUID
+    name: Optional[str]
+    email: EmailStr
+    last_login: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
 # --- 使用者身體數據(性別、年齡、身高、體重、bmi) ---
 class UsersBodyInfoCreate(BaseModel):
     user_id: UUID
