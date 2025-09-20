@@ -112,12 +112,10 @@ def ping(db: Session = Depends(get_db)):
 # ========== API新增資料 ==========
 @app.post("/users/", response_model=UserResponse)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # 檢查 email 是否已存在
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # 建立使用者
     hashed_password = pwd_context.hash(user.password)
     new_user = models.User(
         user_id=uuid4(),
@@ -129,7 +127,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # 建立對應的 users_params
+    # 建立 users_params
     default_params = models.UsersParams(
         user_id=new_user.user_id,
         m_c=1.0,
@@ -142,9 +140,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(default_params)
     db.commit()
     db.refresh(default_params)
-    print("✅ 新增 users_params:", default_params.__dict__)
 
-    return new_user
+    return UserResponse.from_orm(new_user)
+
 
 
 @app.post("/login/", response_model=UserLoginResponse)
