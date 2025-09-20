@@ -129,7 +129,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # 建立對應的 users_params（帶入你指定的預設值）
+    # 建立對應的 users_params
     default_params = models.UsersParams(
         user_id=new_user.user_id,
         m_c=1.0,
@@ -141,6 +141,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     )
     db.add(default_params)
     db.commit()
+    db.refresh(default_params)
+    print("✅ 新增 users_params:", default_params.__dict__)
 
     return new_user
 
