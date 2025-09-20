@@ -34,7 +34,7 @@ from app.schemas import (
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4, UUID
 from passlib.context import CryptContext
-from .database import engine, SessionLocal, get_db
+from .database import engine, SessionLocal
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
