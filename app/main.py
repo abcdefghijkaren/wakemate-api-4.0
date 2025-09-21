@@ -128,20 +128,28 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     # 建立 users_params
-    default_params = models.UsersParams(
-        user_id=new_user.user_id,
-        m_c=1.0,
-        k_a=1.25,
-        k_c=0.20,
-        trait_alertness=0.0,
-        p0_value=270.0,
-        pvt_count_7d=0
-    )
-    db.add(default_params)
-    db.commit()
-    db.refresh(default_params)
+    # 預設參數 (dict 格式)
+    default_values = {
+        "m_c": 1.0,
+        "k_a": 1.25,
+        "k_c": 0.20,
+        "trait_alertness": 0.0,
+        "p0_value": 270.0,
+        "pvt_count_7d": 0
+    }
 
-    return UserResponse.from_orm(new_user)
+    # 確保 users_params 有正確的預設值
+    existing_params = db.query(models.UsersParams).filter_by(user_id=new_user.user_id).first()
+    if not existing_params:
+        db.add(models.UsersParams(user_id=new_user.user_id, **default_values))
+    else:
+        for k, v in default_values.items():
+            setattr(existing_params, k, v)
+
+    db.commit()
+
+
+    return schemas.UserResponse.from_orm(new_user)
 
 
 
