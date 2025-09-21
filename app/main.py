@@ -170,24 +170,27 @@ def login_user(user: UserLogin, db: Session = Depends(get_db)):
     return db_user
 
 
-@app.post("/users_body_info/")
+@app.post("/users_body_info/", response_model=schemas.UsersBodyInfoResponse)
 def upsert_user_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_db)):
     try:
         stmt = insert(UsersBodyInfo).values(**data.dict())
         stmt = stmt.on_conflict_do_update(
-            index_elements=[UsersBodyInfo.user_id],  # 用 user_id 作為唯一 key
+            index_elements=[UsersBodyInfo.user_id],
             set_={
                 "gender": stmt.excluded.gender,
                 "age": stmt.excluded.age,
                 "height": stmt.excluded.height,
                 "weight": stmt.excluded.weight,
                 "bmi": stmt.excluded.bmi,
-                "updated_at": stmt.excluded.updated_at,
+                "updated_at": func.now(),
             },
         )
         db.execute(stmt)
         db.commit()
-        return {"status": "success", "message": f"Body info for {data.user_id} updated"}
+
+        # 重新查詢並回傳最新紀錄
+        updated_info = db.query(UsersBodyInfo).filter(UsersBodyInfo.user_id == data.user_id).first()
+        return updated_info
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -306,7 +309,7 @@ def get_users_login(user_id: UUID = Query(None), db: Session = Depends(get_db)):
         query = query.filter(UserLogin.user_id == user_id)
     return query.all()
 
-@app.get("/users_body_info/")
+@app.get("/users_body_info/", response_model=list[schemas.UsersBodyInfoResponse])
 def get_users_body_info(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(UsersBodyInfo)
     if user_id:

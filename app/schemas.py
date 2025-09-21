@@ -41,6 +41,18 @@ class UsersBodyInfoCreate(BaseModel):
     weight: float
     bmi: float
 
+class UsersBodyInfoResponse(BaseModel):
+    user_id: UUID
+    gender: Optional[str]
+    age: Optional[int]
+    height: Optional[float]
+    weight: Optional[float]
+    bmi: Optional[float]
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # --- 使用者實際睡眠資料 ---
 class UsersRealSleepDataCreate(BaseModel):
     user_id: UUID
