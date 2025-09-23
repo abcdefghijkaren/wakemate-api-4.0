@@ -23,13 +23,21 @@ from app.schemas import (
     UserLogin,
     UserLoginResponse,
     UsersBodyInfoCreate,
+    UsersBodyInfoResponse,
     UsersRealSleepDataCreate,
+    UsersRealSleepDataResponse,
     UsersTargetWakingPeriodCreate,
+    UsersTargetWakingPeriodResponse,
     UsersRealTimeIntakeCreate,
+    UsersRealTimeIntakeResponse,
     UsersPVTResultsCreate,
+    UsersPVTResultsResponse,
     AlertnessDataCreate,
+    AlertnessDataResponse,
     DeviceHeartRateDataCreate,
+    DeviceHeartRateResponse,
     DeviceXYZTimeDataCreate,
+    DeviceXYZTimeResponse,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4, UUID
@@ -196,7 +204,7 @@ def upsert_user_body_info(data: UsersBodyInfoCreate, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/users_sleep/")
+@app.post("/users_sleep/", response_model=schemas.UsersRealSleepDataResponse)
 def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depends(get_db)):
     try:
         entry = models.UsersRealSleepData(**data.dict())
@@ -213,7 +221,7 @@ def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depe
 
 
 
-@app.post("/users_wake/")
+@app.post("/users_wake/", response_model=schemas.UsersTargetWakingPeriodResponse)
 def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):
     try:
         entry = models.UsersTargetWakingPeriod(**data.dict())
@@ -229,7 +237,7 @@ def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = 
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/users_intake/")
+@app.post("/users_intake/", response_model=schemas.UsersRealTimeIntakeResponse)
 def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = Depends(get_db)):
     try:
         entry = models.UsersRealTimeIntake(**data.dict())
@@ -246,7 +254,7 @@ def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = De
 
 
 from core.personalize_params import update_user_params
-@app.post("/users_pvt/")
+@app.post("/users_pvt/", response_model=schemas.UsersPVTResultsResponse)
 def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(get_db)):
     try:
         entry = models.UsersPVTResults(**data.dict())
@@ -279,7 +287,7 @@ def create_user_pvt(data: schemas.UsersPVTResultsCreate, db: Session = Depends(g
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/alertness_data/")
+@app.post("/alertness_data/", response_model=schemas.AlertnessDataResponse)
 def create_alertness_data(data: AlertnessDataCreate, db: Session = Depends(get_db)):
     entry = AlertnessDataForVisualization(**data.dict())
     db.add(entry)
@@ -304,9 +312,9 @@ def get_users(user_id: UUID = Query(None), db: Session = Depends(get_db)):
 
 @app.get("/login/")
 def get_users_login(user_id: UUID = Query(None), db: Session = Depends(get_db)):
-    query = db.query(UserLogin)
+    query = db.query(User)
     if user_id:
-        query = query.filter(UserLogin.user_id == user_id)
+        query = query.filter(User.user_id == user_id)
     return query.all()
 
 @app.get("/users_body_info/", response_model=list[schemas.UsersBodyInfoResponse])
@@ -317,7 +325,7 @@ def get_users_body_info(user_id: UUID = Query(None), db: Session = Depends(get_d
     return query.all()
 
 
-@app.get("/users_sleep/")
+@app.get("/users_sleep/", response_model=list[schemas.UsersRealSleepDataResponse])
 def get_sleep_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(UsersRealSleepData)
     if user_id:
@@ -325,7 +333,7 @@ def get_sleep_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     return query.all()
 
 
-@app.get("/users_wake/")
+@app.get("/users_wake/", response_model=list[schemas.UsersTargetWakingPeriodResponse])
 def get_wake_target(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(UsersTargetWakingPeriod)
     if user_id:
@@ -333,7 +341,7 @@ def get_wake_target(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     return query.all()
 
 
-@app.get("/users_intake/")
+@app.get("/users_intake/", response_model=list[schemas.UsersRealTimeIntakeResponse])
 def get_intake_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(UsersRealTimeIntake)
     if user_id:
@@ -341,7 +349,7 @@ def get_intake_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     return query.all()
 
 
-@app.get("/users_pvt/")
+@app.get("/users_pvt/", response_model=list[schemas.UsersPVTResultsResponse])
 def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(UsersPVTResults)
     if user_id:
@@ -349,7 +357,7 @@ def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     return query.all()
 
 
-@app.get("/recommendations/")
+@app.get("/recommendations/", response_model=list[schemas.RecommendationsCaffeineResponse])
 def get_recommendations(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(RecommendationsCaffeine)
     if user_id:
@@ -357,7 +365,7 @@ def get_recommendations(user_id: UUID = Query(None), db: Session = Depends(get_d
     return query.all()
 
 
-@app.get("/alertness_data/")
+@app.get("/alertness_data/", response_model=list[schemas.AlertnessDataResponse])
 def get_alertness_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
     query = db.query(AlertnessDataForVisualization)
     if user_id:
@@ -379,8 +387,11 @@ def create_heart_rate_bulk(payload: schemas.BulkHeartRate, db: Session = Depends
 
 
 @app.get("/device/heart_rate", response_model=list[schemas.DeviceHeartRateResponse])
-def get_heart_rate(db: Session = Depends(get_db)):
-    return db.query(models.DeviceHeartRate).all()
+def get_heart_rate(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(models.DeviceHeartRateData)
+    if user_id:
+        query = query.filter(models.DeviceHeartRateData.user_id == user_id)
+    return query.all()
 
 
 # ================== 批量寫入 XYZ Time ==================
@@ -399,5 +410,8 @@ def create_xyz_time_bulk(payload: schemas.BulkXYZTime, db: Session = Depends(get
 
 
 @app.get("/device/xyz_time", response_model=list[schemas.DeviceXYZTimeResponse])
-def get_xyz_time(db: Session = Depends(get_db)):
-    return db.query(models.DeviceXYZTimeData).all()
+def get_xyz_time(user_id: UUID = Query(None), db: Session = Depends(get_db)):
+    query = db.query(models.DeviceXYZTimeData)
+    if user_id:
+        query = query.filter(models.DeviceXYZTimeData.user_id == user_id)
+    return query.all()
