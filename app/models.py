@@ -104,6 +104,7 @@ class RecommendationsCaffeine(Base):
     recommended_caffeine_amount = Column(Integer, nullable=False)
     recommended_caffeine_intake_timing = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    source_data_latest_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="recommendations")
 
