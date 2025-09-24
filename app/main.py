@@ -46,6 +46,7 @@ from .database import engine, SessionLocal
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+from fastapi.responses import PlainTextResponse
 
 # 計算模組
 from core.caffeine_recommendation import run_caffeine_recommendation
@@ -107,12 +108,15 @@ scheduler.add_job(scheduled_job, "interval", hours=1)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
+@app.head("/")
+def head_root():
+    return PlainTextResponse("ok")
 
 @app.get("/ping")
 def ping(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "success", "message": "連線成功 ✅"}
+        return {"status": "success", "message": "連線成功"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
