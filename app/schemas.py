@@ -53,13 +53,15 @@ class UsersBodyInfoResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+
 # --- 使用者實際睡眠資料 ---
 class UsersRealSleepDataCreate(BaseModel):
     user_id: UUID
     sleep_start_time: datetime
     sleep_end_time: datetime
 
-class UsersRealSleepDataResponse(BaseModel):
+class UsersRealSleepData_DB_Response(BaseModel):
     user_id: UUID
     sleep_start_time:  datetime
     sleep_end_time: datetime
@@ -68,13 +70,21 @@ class UsersRealSleepDataResponse(BaseModel):
     class Config:
         from_attributes = True  # 替代 orm_mode = True
 
+# API 回傳格式 (新增成功用)
+class UsersRealSleepDataCreate_API_Response(BaseModel):
+    status: str
+    id: int
+    calculation: dict  # trigger_calculation 回傳的結果
+
+
+
 # --- 使用者設定清醒區間 ---
 class UsersTargetWakingPeriodCreate(BaseModel):
     user_id: UUID
     target_start_time:  Optional[datetime]  # ISO 格式時間字串
     target_end_time:  Optional[datetime]
 
-class UsersTargetWakingPeriodResponse(BaseModel):
+class UsersTargetWakingPeriod_DB_Response(BaseModel):
     user_id: UUID
     target_start_time:  Optional[datetime]  # ISO 格式時間字串
     target_end_time:  Optional[datetime]
@@ -82,6 +92,14 @@ class UsersTargetWakingPeriodResponse(BaseModel):
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+# API 回傳格式 (新增成功用)
+class UsersTargetWakingPeriodCreate_API_Response(BaseModel):
+    status: str
+    id: int
+    calculation: dict  # trigger_calculation 回傳的結果
+
+
 
 # --- 使用者即時咖啡因攝取資料 ---
 class UsersRealTimeIntakeCreate(BaseModel):
@@ -90,7 +108,7 @@ class UsersRealTimeIntakeCreate(BaseModel):
     caffeine_amount: int
     taking_timestamp: datetime
 
-class UsersRealTimeIntakeResponse(BaseModel):
+class UsersRealTimeIntake_DB_Response(BaseModel):
     user_id: UUID
     drink_name: str
     caffeine_amount: int
@@ -99,6 +117,14 @@ class UsersRealTimeIntakeResponse(BaseModel):
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+# API 回傳格式 (新增成功用)
+class UsersRealTimeIntakeCreate_API_Response(BaseModel):
+    status: str
+    id: int
+    calculation: dict  # trigger_calculation 回傳的結果
+
+
 
 # --- 使用者反應時間測試結果 (PVT) ---
 class UsersPVTResultsCreate(BaseModel):
@@ -110,7 +136,7 @@ class UsersPVTResultsCreate(BaseModel):
     device: str
     kss_level: Optional[int]
 
-class UsersPVTResultsResponse(BaseModel):
+class UsersPVTResults_DB_Response(BaseModel):
     user_id: UUID
     mean_rt: float
     lapses: int
@@ -123,13 +149,21 @@ class UsersPVTResultsResponse(BaseModel):
     class Config:
         from_attributes = True  # 替代 orm_mode = True
 
+# API 回傳格式 (新增成功用)
+class UsersPVTResultsCreate_API_Response(BaseModel):
+    status: str
+    id: int
+    calculation: dict  # trigger_calculation 回傳的結果
+
+
+
 # --- 建議攝取資訊 ---
 class RecommendationsCaffeineCreate(BaseModel):
     user_id: UUID
     recommended_caffeine_amount: Optional[int]
     recommended_caffeine_intake_timing: Optional[datetime]
 
-class RecommendationsCaffeineResponse(BaseModel):
+class RecommendationsCaffeine_DB_Response(BaseModel):
     user_id: UUID
     recommended_caffeine_amount: Optional[int]
     recommended_caffeine_intake_timing: Optional[datetime]
@@ -138,6 +172,8 @@ class RecommendationsCaffeineResponse(BaseModel):
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+
 
 # --- 清醒度資料 ---
 class AlertnessDataCreate(BaseModel):
@@ -151,7 +187,7 @@ class AlertnessDataCreate(BaseModel):
     P_t_no_caffeine: Optional[float] = None
     P_t_real: Optional[float] = None
 
-class AlertnessDataResponse(BaseModel):
+class AlertnessData_DB_Response(BaseModel):
     user_id: UUID
     timestamp: datetime
     awake: bool
@@ -178,7 +214,7 @@ class DeviceHeartRateDataCreate(BaseModel):
     source: Optional[str]
     user_id: Optional[UUID]
 
-class DeviceHeartRateResponse(BaseModel):
+class DeviceHeartRate_DB_Response(BaseModel):
     id: int
     time: datetime
     heartrate: int
@@ -203,7 +239,7 @@ class DeviceXYZTimeDataCreate(BaseModel):
     z: float
     user_id: Optional[UUID]
 
-class DeviceXYZTimeResponse(BaseModel):
+class DeviceXYZTime_DB_Response(BaseModel):
     id: int
     timestamp: datetime
     x: float
