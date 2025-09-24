@@ -60,8 +60,8 @@ class UsersTargetWakingPeriod(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    target_start_time = Column(Time(timezone=True), nullable=False)
-    target_end_time = Column(Time(timezone=True), nullable=False)
+    target_start_time = Column(DateTime(timezone=True), nullable=False)
+    target_end_time = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="waking_periods")
@@ -89,7 +89,7 @@ class UsersPVTResults(Base):
     lapses = Column(Integer, nullable=False)
     false_starts = Column(Integer, nullable=False)
     test_at = Column(DateTime(timezone=True), nullable=False)
-    device = Column(String, nullable=True)
+    device = Column(String, nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     kss_level = Column(Integer, nullable=True)
 
@@ -102,7 +102,7 @@ class RecommendationsCaffeine(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     recommended_caffeine_amount = Column(Integer, nullable=False)
-    recommended_caffeine_intake_timing = Column(Time(timezone=True), nullable=False)
+    recommended_caffeine_intake_timing = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="recommendations")

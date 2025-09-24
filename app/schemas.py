@@ -61,8 +61,9 @@ class UsersRealSleepDataCreate(BaseModel):
 
 class UsersRealSleepDataResponse(BaseModel):
     user_id: UUID
-    sleep_start_time: datetime
+    sleep_start_time:  datetime
     sleep_end_time: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -70,13 +71,14 @@ class UsersRealSleepDataResponse(BaseModel):
 # --- 使用者設定清醒區間 ---
 class UsersTargetWakingPeriodCreate(BaseModel):
     user_id: UUID
-    target_start_time: datetime  # ISO 格式時間字串
-    target_end_time: datetime
+    target_start_time:  Optional[datetime]  # ISO 格式時間字串
+    target_end_time:  Optional[datetime]
 
 class UsersTargetWakingPeriodResponse(BaseModel):
     user_id: UUID
-    target_start_time: datetime  # ISO 格式時間字串
-    target_end_time: datetime
+    target_start_time:  Optional[datetime]  # ISO 格式時間字串
+    target_end_time:  Optional[datetime]
+    updated_at: datetime
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -93,6 +95,7 @@ class UsersRealTimeIntakeResponse(BaseModel):
     drink_name: str
     caffeine_amount: int
     taking_timestamp: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -105,7 +108,7 @@ class UsersPVTResultsCreate(BaseModel):
     false_starts: int
     test_at: datetime
     device: str
-    kss_level: int
+    kss_level: Optional[int]
 
 class UsersPVTResultsResponse(BaseModel):
     user_id: UUID
@@ -114,7 +117,8 @@ class UsersPVTResultsResponse(BaseModel):
     false_starts: int
     test_at: datetime
     device: str
-    kss_level: int
+    kss_level: Optional[int]
+    updated_at: datetime
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -122,13 +126,15 @@ class UsersPVTResultsResponse(BaseModel):
 # --- 建議攝取資訊 ---
 class RecommendationsCaffeineCreate(BaseModel):
     user_id: UUID
-    recommended_caffeine_amount: int
-    recommended_caffeine_intake_timing: time
+    recommended_caffeine_amount: Optional[int]
+    recommended_caffeine_intake_timing: Optional[datetime]
 
 class RecommendationsCaffeineResponse(BaseModel):
     user_id: UUID
-    recommended_caffeine_amount: int
-    recommended_caffeine_intake_timing: time
+    recommended_caffeine_amount: Optional[int]
+    recommended_caffeine_intake_timing: Optional[datetime]
+    updated_at: datetime
+    source_data_latest_at: Optional[datetime]
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -141,9 +147,9 @@ class AlertnessDataCreate(BaseModel):
     g_PD_rec: float
     g_PD_real: float
     P0_values: float
-    P_t_caffeine: float
-    P_t_no_caffeine: float
-    P_t_real: float
+    P_t_caffeine: Optional[float] = None
+    P_t_no_caffeine: Optional[float] = None
+    P_t_real: Optional[float] = None
 
 class AlertnessDataResponse(BaseModel):
     user_id: UUID
@@ -152,9 +158,11 @@ class AlertnessDataResponse(BaseModel):
     g_PD_rec: float
     g_PD_real: float
     P0_values: float
-    P_t_caffeine: float
-    P_t_no_caffeine: float
-    P_t_real: float
+    P_t_caffeine: Optional[float] = None
+    P_t_no_caffeine: Optional[float] = None
+    P_t_real: Optional[float] = None
+    updated_at: datetime
+    source_data_latest_at: Optional[datetime]
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
@@ -177,9 +185,11 @@ class DeviceHeartRateResponse(BaseModel):
     confidence: int
     source: Optional[str]
     user_id: Optional[UUID]
+    updated_at: datetime
 
     class Config:
         from_attributes = True
+
 
 class BulkHeartRate(BaseModel):
     records: List[DeviceHeartRateDataCreate]
@@ -200,6 +210,7 @@ class DeviceXYZTimeResponse(BaseModel):
     y: float
     z: float
     user_id: Optional[UUID]
+    updated_at: datetime
 
     class Config:
         from_attributes = True
