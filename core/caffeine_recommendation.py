@@ -132,7 +132,7 @@ def _compute_precise_dose_for_hour(
 
     # Protect against tiny fractional required values that would be rounded up to one DOSE_STEP
     # (avoid returning 25 mg for trivial tiny requirements)
-    MIN_EFFECTIVE_FRACTION = 0.5  # if required < DOSE_STEP * 0.5 -> treat as 0
+    MIN_EFFECTIVE_FRACTION = 0.1  # if required < DOSE_STEP * 0.5 -> treat as 0
     if best_required < DOSE_STEP * MIN_EFFECTIVE_FRACTION:
         if DEBUG:
             print(f"[dose] best_required {best_required} < {DOSE_STEP * MIN_EFFECTIVE_FRACTION} -> treat as 0")
