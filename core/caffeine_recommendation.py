@@ -65,8 +65,22 @@ def _compute_precise_dose_for_hour(
     window_hours: int = WINDOW_HOURS,
     threshold: float = ALERTNESS_THRESHOLD
 ) -> float:
+    # debug 開關：設 True 會 print 詳細內部變數（部署時設 False）
+    DEBUG = False
+
     best_required = 0.0
     t_len = len(P0_values)
+
+    # sanity checks
+    if k_a == k_c:
+        # 避免除以零
+        if DEBUG:
+            print(f"[dose] k_a == k_c ({k_a}) — 返回 0")
+        return 0.0
+    if m_c is None or m_c == 0:
+        if DEBUG:
+            print(f"[dose] m_c is zero/None ({m_c}) — 返回 0")
+        return 0.0
 
     for offset in range(1, window_hours + 1):
         t_j = hour_idx + offset
@@ -74,27 +88,59 @@ def _compute_precise_dose_for_hour(
             break
 
         base = P0_values[t_j] * g_PD_current[t_j]
+        # debug
+        if DEBUG:
+            print(f"[dose] hour={hour_idx} offset={offset} t_j={t_j} base={base}")
+
         if base <= 0:
             continue
 
         R = threshold / base
+        # debug
+        if DEBUG:
+            print(f"[dose] R={R}")
+
+        # only proceed if R < 1 (i.e. base > threshold)
         if R >= 1.0:
             continue
 
         delta = float(offset)
         phi = np.exp(-k_c * delta) - np.exp(-k_a * delta)
+        if DEBUG:
+            print(f"[dose] phi={phi}")
+
         if phi <= 0:
             continue
 
         A_t = (m_c / 200.0) * (k_a / (k_a - k_c)) * phi
+        # guard A_t tiny or negative
+        if A_t <= 0:
+            if DEBUG:
+                print(f"[dose] A_t non-positive: {A_t}")
+            continue
+
         required = (1.0 / R - 1.0) / A_t
+        if DEBUG:
+            print(f"[dose] required={required}")
+
         if required > best_required:
             best_required = required
 
+    # If nothing needed
     if best_required <= 0:
         return 0.0
+
+    # Protect against tiny fractional required values that would be rounded up to one DOSE_STEP
+    # (avoid returning 25 mg for trivial tiny requirements)
+    MIN_EFFECTIVE_FRACTION = 0.5  # if required < DOSE_STEP * 0.5 -> treat as 0
+    if best_required < DOSE_STEP * MIN_EFFECTIVE_FRACTION:
+        if DEBUG:
+            print(f"[dose] best_required {best_required} < {DOSE_STEP * MIN_EFFECTIVE_FRACTION} -> treat as 0")
+        return 0.0
+
     steps = int(np.ceil(best_required / DOSE_STEP))
     return steps * DOSE_STEP
+
 
 
 def _apply_dose_to_gpd(
