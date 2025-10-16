@@ -4,6 +4,18 @@ from datetime import timedelta
 from psycopg2.extras import execute_values
 from typing import List, Dict, Optional
 
+# numeric safety for exponentials
+_EXP_CLIP_LOWER = -700.0
+_EXP_CLIP_UPPER = 700.0
+
+def _safe_phi_array(k_c, k_a, t_minus_t0):
+    arg1 = np.clip(-k_c * t_minus_t0, _EXP_CLIP_LOWER, _EXP_CLIP_UPPER)
+    arg2 = np.clip(-k_a * t_minus_t0, _EXP_CLIP_LOWER, _EXP_CLIP_UPPER)
+    with np.errstate(over='ignore', invalid='ignore'):
+        phi = np.exp(arg1) - np.exp(arg2)
+    phi = np.where(np.isfinite(phi), phi, 0.0)
+    return phi
+
 def _get_user_ids_for_alertness(cursor):
     cursor.execute("""
         SELECT DISTINCT user_id FROM (
@@ -38,13 +50,12 @@ def _get_last_processed_ts_for_alert(cursor, user_id):
 
 def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
     """
-    若傳入 user_params_map，格式:
-      { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
-    若未傳入，會從 users_params 讀取所有使用者的參數並建立該 map。
+    生成視覺化用的 P_t (自然 / 實際攝取 / 按推薦攝取)
+    內含數值穩定性修正以避免 exp overflow。
     """
     cur = conn.cursor()
     try:
-        # 載入使用者參數（與 caffeine_recommendation.py 的方式一致）
+        # load user params if not provided
         if user_params_map is None:
             user_params_map = {}
             try:
@@ -53,7 +64,6 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                     FROM users_params;
                 """)
                 for r in cur.fetchall():
-                    # r: (user_id, m_c, k_a, k_c, trait_alertness, p0_value)
                     user_params_map[r[0]] = {
                         "m_c": float(r[1]) if r[1] is not None else 1.0,
                         "k_a": float(r[2]) if r[2] is not None else 1.25,
@@ -85,7 +95,7 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             if latest_source_ts <= last_processed_ts:
                 continue
 
-            # 取各表資料
+            # fetch inputs
             cur.execute("""
                 SELECT sleep_start_time, sleep_end_time
                 FROM users_real_sleep_data
@@ -121,7 +131,6 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             """, (uid,))
             rec_rows = cur.fetchall()
 
-            # 讀取使用者參數（若無則使用 fallback）
             params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
             m_c = params["m_c"]
             k_a = params["k_a"]
@@ -129,7 +138,7 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             trait = params.get("trait", 0.0)
             P0_base = params.get("p0_value", 270.0)
 
-            # 計算時間範圍
+            # time range
             min_start = min(
                 min(r[0] for r in sleep_rows),
                 min(r[0] for r in target_rows)
@@ -147,39 +156,42 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
             time_index = [min_start + timedelta(hours=i) for i in range(total_hours + 1)]
             t = np.arange(total_hours + 1)
 
-            # 計算 awake_flags
+            # awake flags
             awake_flags = np.ones(len(time_index), dtype=bool)
             for i, now_dt in enumerate(time_index):
                 asleep = any(start <= now_dt < end for (start, end) in sleep_rows)
                 awake_flags[i] = (not asleep)
 
-            # ---------- P_t_no_caffeine (自然清醒度) ----------
+            # P_t_no_caffeine
             P_t_no_caffeine = np.zeros(len(time_index), dtype=float)
             for i, now_dt in enumerate(time_index):
                 hour = now_dt.hour
-                # 加上 trait（個人化偏移）
                 if awake_flags[i]:
                     P_t_no_caffeine[i] = P0_base + sigmoid(hour) + trait
                 else:
                     P_t_no_caffeine[i] = P0_base + trait
 
-            # ---------- P0_values (使用者 p0_value, 我把 trait 一併加入 baseline) ----------
             P0_values = np.full(len(time_index), P0_base + trait, dtype=float)
 
-            # ---------- g_PD_real ----------
+            # g_PD_real (from actual intakes) - safe exponent handling
             g_PD_real = np.ones(len(time_index), dtype=float)
             if caf_rows:
                 for take_time, dose in caf_rows:
                     dose = safe_float(dose, 0.0)
                     t_0 = int((take_time - min_start).total_seconds() // 3600)
+                    # allow some tolerance for out-of-range
                     if t_0 >= len(t) or t_0 < -10000:
                         continue
-                    effect = 1 / (1 + (m_c * dose / 200) * (k_a / (k_a - k_c)) *
-                                  (np.exp(-k_c * (t - t_0)) - np.exp(-k_a * (t - t_0))))
+                    t_minus_t0 = t - t_0
+                    phi = _safe_phi_array(k_c, k_a, t_minus_t0)
+                    factor = (m_c * dose / 200.0) * (k_a / (k_a - k_c)) if abs(k_a - k_c) >= 1e-12 else 0.0
+                    den = 1.0 + factor * phi
+                    den = np.where(np.isfinite(den) & (den != 0.0), den, np.inf)
+                    effect = 1.0 / den
                     effect = np.where(t < t_0, 1.0, effect)
                     g_PD_real *= effect
 
-            # ---------- g_PD_rec ----------
+            # g_PD_rec (from recommendations) - safe exponent handling
             g_PD_rec = np.ones(len(time_index), dtype=float)
             if rec_rows:
                 for rec_amount, rec_time in rec_rows:
@@ -187,31 +199,32 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                     t_0 = int((rec_time - min_start).total_seconds() // 3600)
                     if t_0 >= len(t) or t_0 < -10000:
                         continue
-                    effect = 1 / (1 + (m_c * amt / 200) * (k_a / (k_a - k_c)) *
-                                  (np.exp(-k_c * (t - t_0)) - np.exp(-k_a * (t - t_0))))
+                    t_minus_t0 = t - t_0
+                    phi = _safe_phi_array(k_c, k_a, t_minus_t0)
+                    factor = (m_c * amt / 200.0) * (k_a / (k_a - k_c)) if abs(k_a - k_c) >= 1e-12 else 0.0
+                    den = 1.0 + factor * phi
+                    den = np.where(np.isfinite(den) & (den != 0.0), den, np.inf)
+                    effect = 1.0 / den
                     effect = np.where(t < t_0, 1.0, effect)
                     g_PD_rec *= effect
 
-            # ---------- P_t 計算 ----------
+            # P_t calculations
             P_t_caffeine = P_t_no_caffeine * g_PD_rec
             P_t_real = P_t_no_caffeine * g_PD_real
 
-            # 睡眠時間改為 0.0
+            # set sleeping times to NaN
             for arr in (P_t_caffeine, P_t_no_caffeine, P_t_real):
                 arr[~awake_flags] = 0.0
-
-            # 設置睡眠時間為 NULL（NaN）
             for arr, g_arr in ((P_t_caffeine, g_PD_rec), (P_t_no_caffeine, g_PD_rec), (P_t_real, g_PD_real)):
                 arr[~awake_flags] = np.nan
 
-            # 刪除舊 snapshot
+            # delete old snapshot (same logic as before)
             cur.execute("""
                 DELETE FROM alertness_data_for_visualization
                 WHERE user_id = %s
                   AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
             """, (uid, latest_source_ts))
 
-            # 插入資料庫
             insert_rows = []
             for i, now_dt in enumerate(time_index):
                 insert_rows.append((
@@ -238,5 +251,6 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
     except Exception as e:
         conn.rollback()
         print(f"執行清醒度數據計算時發生錯誤: {e}")
+        raise
     finally:
         cur.close()
