@@ -1,24 +1,17 @@
-# caffeine_recommendation.py (修補版)
+# caffeine_recommendation.py
 import numpy as np
 from psycopg2.extras import execute_values
 from datetime import timedelta
 from typing import Dict, Optional
 
-# ---------- Config / 超參數（可調） ----------
 ALERTNESS_THRESHOLD = 270.0  # 目標上限（ms）
-FORBIDDEN_HOURS_BEFORE_SLEEP = 6
-DOSE_STEP = 25.0
-MAX_DAILY_DOSE = 300.0
+FORBIDDEN_HOURS_BEFORE_SLEEP = 6  # 睡前禁用時數
+DOSE_STEP = 25.0              # 劑量粒度（四捨五入到 25mg）
+MAX_DAILY_DOSE = 300.0        # 一天上限（mg）
+WINDOW_HOURS = 2              # 劑量要能壓制的視窗長度（以小時數計）
 
-# 改為看更長的未來窗，避免把長時間清醒需求切成很多小劑量
-WINDOW_HOURS = 4
-
-# 同一使用者兩次建議的最小間隔（小於此值會跳過較近期的小劑量）
-MIN_INTERVAL_HOURS = 3
-
-# debug 開關（設 True 可印出內部變數，協助除錯）
+# debug 開關：要印出內部變數請設 True（測試用）
 DEBUG = False
-# -----------------------------------------------
 
 
 def _get_distinct_user_ids(cursor):
@@ -69,31 +62,27 @@ def _compute_precise_dose_for_hour(
     hour_idx: int,
     P0_values: np.ndarray,
     g_PD_current: np.ndarray,
-    m_c: float,
+    M_c: float,
     k_a: float,
     k_c: float,
     window_hours: int = WINDOW_HOURS,
     threshold: float = ALERTNESS_THRESHOLD
 ) -> float:
     """
-    計算在 hour_idx 時刻需要的劑量（mg）。
-    修改重點：
-      - 增加窗長預設為 WINDOW_HOURS（檔頭調整）
-      - 更保守的四捨五入：只有當 required >= DOSE_STEP 時才建議最小一步 (25 mg)
-      - 使用 round 而非 ceil，讓步數較接近直覺
-      - DEBUG 可印內部變數
+    保持原本計算邏輯（未改），但做少量健壯性檢查以避免除零或 None。
+    返回 ceil(best_required / DOSE_STEP) * DOSE_STEP（與原始設計一致）。
     """
     best_required = 0.0
     t_len = len(P0_values)
 
-    # sanity guards
+    # guard: 若參數異常則直接不建議
+    if M_c is None or k_a is None or k_c is None:
+        if DEBUG:
+            print(f"[dose] skip due to missing param M_c={M_c}, k_a={k_a}, k_c={k_c}")
+        return 0.0
     if abs(k_a - k_c) < 1e-9:
         if DEBUG:
-            print(f"[dose] skip: k_a ≈ k_c ({k_a})")
-        return 0.0
-    if m_c is None or m_c == 0:
-        if DEBUG:
-            print(f"[dose] skip: m_c invalid ({m_c})")
+            print(f"[dose] skip due to k_a ≈ k_c (k_a={k_a}, k_c={k_c})")
         return 0.0
 
     for offset in range(1, window_hours + 1):
@@ -102,66 +91,39 @@ def _compute_precise_dose_for_hour(
             break
 
         base = P0_values[t_j] * g_PD_current[t_j]
-        if DEBUG:
-            print(f"[dose] hour={hour_idx} offset={offset} t_j={t_j} base={base}")
-
         if base <= 0:
             continue
 
         R = threshold / base
-        if DEBUG:
-            print(f"[dose] R={R}")
-
-        # 只有當 base > threshold（即 R < 1）才需要考慮補強
         if R >= 1.0:
             continue
 
         delta = float(offset)
         phi = np.exp(-k_c * delta) - np.exp(-k_a * delta)
-        if DEBUG:
-            print(f"[dose] phi={phi}")
-
         if phi <= 0:
             continue
 
-        A_t = (m_c / 200.0) * (k_a / (k_a - k_c)) * phi
-        if DEBUG:
-            print(f"[dose] A_t={A_t}")
-
+        A_t = (M_c / 200.0) * (k_a / (k_a - k_c)) * phi
         if A_t <= 0:
             continue
 
         required = (1.0 / R - 1.0) / A_t
-        if DEBUG:
-            print(f"[dose] required={required}")
-
         if required > best_required:
             best_required = required
 
     if best_required <= 0:
         return 0.0
 
-    # 更保守的策略：若 required < DOSE_STEP，視為不需要（避免把 1-24 mg 抬到 25）
-    if best_required < DOSE_STEP:
-        if DEBUG:
-            print(f"[dose] best_required {best_required:.3f} < DOSE_STEP ({DOSE_STEP}) -> 0")
-        return 0.0
-
-    # 回傳最接近的步數（round）。若希望偏向保守可改成 ceil。
-    steps = int(round(best_required / DOSE_STEP))
-    if steps <= 0:
-        steps = 1
-    dose = steps * DOSE_STEP
-    if DEBUG:
-        print(f"[dose] best_required={best_required:.3f} -> steps={steps}, dose={dose}")
-    return dose
+    # 保持原本 ceil 的行為（你的原始邏輯）
+    steps = int(np.ceil(best_required / DOSE_STEP))
+    return steps * DOSE_STEP
 
 
 def _apply_dose_to_gpd(
     g_PD: np.ndarray,
     dose_mg: float,
     hour_idx: int,
-    m_c: float,
+    M_c: float,
     k_a: float,
     k_c: float
 ) -> None:
@@ -169,7 +131,7 @@ def _apply_dose_to_gpd(
         return
     t = np.arange(len(g_PD))
     t0 = hour_idx
-    effect = 1.0 / (1.0 + (m_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
+    effect = 1.0 / (1.0 + (M_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
                     (np.exp(-k_c * (t - t0)) - np.exp(-k_a * (t - t0))))
     effect = np.where(t < t0, 1.0, effect)
     g_PD *= effect
@@ -177,33 +139,59 @@ def _apply_dose_to_gpd(
 
 def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
-    user_params_map 格式: 
-      { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
-    行為改動：
-      - 使用 WINDOW_HOURS（預設 4）來計算 required
-      - enforce MIN_INTERVAL_HOURS（預設 3）避免短時間重複給小劑量
-      - 若 recommendations 非空則刪除舊推薦（基於 source_data_latest_at 邏輯保留）
+    若 user_params_map 為 None，會自動從 users_params 表載入參數。
+    user_params_map 格式: { user_id: {"M_c": float, "k_a": float, "k_c": float}, ... }
+    兼容性：
+      - 嘗試載入常見欄位名（m_c / M_c），確保型別正確。
+      - 若載入失敗則使用預設值（M_c=1.1, k_a=1.0, k_c=0.5），以維持原本行為。
     """
     cur = conn.cursor()
     try:
-        # 載入使用者參數
         if user_params_map is None:
             user_params_map = {}
+            # 嘗試以常見欄位名載入，並做容錯
             try:
-                cur.execute("""
-                    SELECT user_id, m_c, k_a, k_c, trait_alertness, p0_value 
-                    FROM users_params;
-                """)
-                for r in cur.fetchall():
-                    user_params_map[r[0]] = {
-                        "m_c": float(r[1]),
-                        "k_a": float(r[2]),
-                        "k_c": float(r[3]),
-                        "trait": float(r[4] or 0.0),
-                        "p0_value": float(r[5] or 270.0)
-                    }
+                # 先用常見小寫欄位名 (m_c)
+                cur.execute("SELECT user_id, m_c, k_a, k_c FROM users_params;")
+                rows = cur.fetchall()
+                for r in rows:
+                    uid = r[0]
+                    try:
+                        M_c = float(r[1]) if r[1] is not None else None
+                    except Exception:
+                        M_c = None
+                    try:
+                        k_a = float(r[2]) if r[2] is not None else None
+                    except Exception:
+                        k_a = None
+                    try:
+                        k_c = float(r[3]) if r[3] is not None else None
+                    except Exception:
+                        k_c = None
+                    user_params_map[uid] = {"M_c": M_c, "k_a": k_a, "k_c": k_c}
             except Exception:
-                user_params_map = {}
+                # 若失敗（欄位名不同或表不存在），改用另一組嘗試（大寫 M_c）
+                try:
+                    cur.execute("SELECT user_id, M_c, k_a, k_c FROM users_params;")
+                    rows = cur.fetchall()
+                    for r in rows:
+                        uid = r[0]
+                        try:
+                            M_c = float(r[1]) if r[1] is not None else None
+                        except Exception:
+                            M_c = None
+                        try:
+                            k_a = float(r[2]) if r[2] is not None else None
+                        except Exception:
+                            k_a = None
+                        try:
+                            k_c = float(r[3]) if r[3] is not None else None
+                        except Exception:
+                            k_c = None
+                        user_params_map[uid] = {"M_c": M_c, "k_a": k_a, "k_c": k_c}
+                except Exception:
+                    # 最終 fallback：保持 user_params_map 為空，使用預設值後面會補
+                    user_params_map = {}
 
         user_ids = _get_distinct_user_ids(cur)
         if not user_ids:
@@ -215,14 +203,13 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             latest_source_ts = _get_latest_source_ts(cur, uid)
             last_processed_ts = _get_last_processed_ts_for_rec(cur, uid)
             if latest_source_ts <= last_processed_ts:
-                if DEBUG:
-                    print(f"[user {uid}] no new source data (latest_source_ts <= last_processed_ts)")
                 continue
 
-            params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
-            m_c, k_a, k_c, trait, p0_value = (
-                params["m_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
-            )
+            # 取該使用者參數，若欄位為 None 或缺掉使用預設值
+            params = user_params_map.get(uid, {"M_c": 1.0, "k_a": 1.25, "k_c": 0.5})
+            M_c = params.get("M_c") if params.get("M_c") is not None else 1.1
+            k_a = params.get("k_a") if params.get("k_a") is not None else 1.0
+            k_c = params.get("k_c") if params.get("k_c") is not None else 0.5
 
             # 取該使用者資料
             cur.execute("""
@@ -242,11 +229,9 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             sleep_rows = cur.fetchall()
 
             if not waking_periods or not sleep_rows:
-                if DEBUG:
-                    print(f"[user {uid}] skipping: missing waking_periods or sleep_rows")
                 continue
 
-            sleep_intervals = [(r[1], r[2]) for r in sleep_rows]
+            sleep_intervals = [(r[1], r[2]) for r in sleep_rows]  # (start, end)
             recommendations = []
 
             for _, target_start_time, target_end_time in waking_periods:
@@ -260,20 +245,14 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     now_dt = target_start_time.replace(hour=h, minute=0, second=0, microsecond=0)
                     asleep = any(start <= now_dt < end for (start, end) in sleep_intervals)
                     awake_flags[h] = (not asleep)
-
-                    if asleep:
-                        # 睡眠：固定 baseline + trait
-                        P0_values[h] = 270.0 + trait
-                    else:
-                        # 清醒：baseline + circadian + trait
-                        P0_values[h] = (270.0 + _sigmoid(h)) + trait
+                    # 與你原本相同的 baseline 計算（不加入 trait）
+                    P0_values[h] = 270.0 + _sigmoid(h) if not asleep else 270.0
 
                 g_PD = np.ones_like(t, dtype=float)
                 P_t = P0_values * g_PD
 
                 daily_dose = 0.0
                 intake_schedule = []
-                last_recommend_hour = -999  # 用整數 hour index 記錄上次建議位置（相對於 target_start_time 的 hour）
 
                 for hour in range(24):
                     recommended_time = target_start_time.replace(hour=hour, minute=0, second=0, microsecond=0)
@@ -299,7 +278,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                         hour_idx=hour,
                         P0_values=P0_values,
                         g_PD_current=g_PD,
-                        m_c=m_c, k_a=k_a, k_c=k_c,
+                        M_c=M_c, k_a=k_a, k_c=k_c,
                         window_hours=WINDOW_HOURS,
                         threshold=ALERTNESS_THRESHOLD
                     )
@@ -309,19 +288,10 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     if dose_to_give <= 0.0:
                         continue
 
-                    # enforce minimal spacing between recommendations
-                    if last_recommend_hour != -999:
-                        if (hour - last_recommend_hour) < MIN_INTERVAL_HOURS:
-                            if DEBUG:
-                                print(f"[user {uid}] skip hour {hour} due to MIN_INTERVAL_HOURS (last {last_recommend_hour})")
-                            continue
-
-                    # accept this recommendation
                     intake_schedule.append((uid, dose_to_give, recommended_time))
                     daily_dose += dose_to_give
-                    last_recommend_hour = hour
 
-                    _apply_dose_to_gpd(g_PD, dose_to_give, hour, m_c, k_a, k_c)
+                    _apply_dose_to_gpd(g_PD, dose_to_give, hour, M_c, k_a, k_c)
                     P_t = P0_values * g_PD
 
                 filtered = [
@@ -332,7 +302,6 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 recommendations.extend(filtered)
 
             if recommendations:
-                # 覆蓋策略保留：刪除舊的（較舊 source_data_latest_at 的）並插入新的推薦
                 cur.execute("""
                     DELETE FROM recommendations_caffeine
                     WHERE user_id = %s
@@ -349,8 +318,6 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     [(r[0], r[1], r[2], latest_source_ts) for r in recommendations]
                 )
                 conn.commit()
-                if DEBUG:
-                    print(f"[user {uid}] inserted {len(recommendations)} recommendations")
 
     except Exception as e:
         conn.rollback()
