@@ -1,14 +1,24 @@
-# caffeine_recommendation.py
+# caffeine_recommendation.py (修補版)
 import numpy as np
 from psycopg2.extras import execute_values
 from datetime import timedelta
 from typing import Dict, Optional
 
+# ---------- Config / 超參數（可調） ----------
 ALERTNESS_THRESHOLD = 270.0  # 目標上限（ms）
 FORBIDDEN_HOURS_BEFORE_SLEEP = 6
 DOSE_STEP = 25.0
 MAX_DAILY_DOSE = 300.0
-WINDOW_HOURS = 2
+
+# 改為看更長的未來窗，避免把長時間清醒需求切成很多小劑量
+WINDOW_HOURS = 4
+
+# 同一使用者兩次建議的最小間隔（小於此值會跳過較近期的小劑量）
+MIN_INTERVAL_HOURS = 3
+
+# debug 開關（設 True 可印出內部變數，協助除錯）
+DEBUG = False
+# -----------------------------------------------
 
 
 def _get_distinct_user_ids(cursor):
@@ -65,21 +75,25 @@ def _compute_precise_dose_for_hour(
     window_hours: int = WINDOW_HOURS,
     threshold: float = ALERTNESS_THRESHOLD
 ) -> float:
-    # debug 開關：設 True 會 print 詳細內部變數（部署時設 False）
-    DEBUG = False
-
+    """
+    計算在 hour_idx 時刻需要的劑量（mg）。
+    修改重點：
+      - 增加窗長預設為 WINDOW_HOURS（檔頭調整）
+      - 更保守的四捨五入：只有當 required >= DOSE_STEP 時才建議最小一步 (25 mg)
+      - 使用 round 而非 ceil，讓步數較接近直覺
+      - DEBUG 可印內部變數
+    """
     best_required = 0.0
     t_len = len(P0_values)
 
-    # sanity checks
-    if k_a == k_c:
-        # 避免除以零
+    # sanity guards
+    if abs(k_a - k_c) < 1e-9:
         if DEBUG:
-            print(f"[dose] k_a == k_c ({k_a}) — 返回 0")
+            print(f"[dose] skip: k_a ≈ k_c ({k_a})")
         return 0.0
     if m_c is None or m_c == 0:
         if DEBUG:
-            print(f"[dose] m_c is zero/None ({m_c}) — 返回 0")
+            print(f"[dose] skip: m_c invalid ({m_c})")
         return 0.0
 
     for offset in range(1, window_hours + 1):
@@ -88,7 +102,6 @@ def _compute_precise_dose_for_hour(
             break
 
         base = P0_values[t_j] * g_PD_current[t_j]
-        # debug
         if DEBUG:
             print(f"[dose] hour={hour_idx} offset={offset} t_j={t_j} base={base}")
 
@@ -96,11 +109,10 @@ def _compute_precise_dose_for_hour(
             continue
 
         R = threshold / base
-        # debug
         if DEBUG:
             print(f"[dose] R={R}")
 
-        # only proceed if R < 1 (i.e. base > threshold)
+        # 只有當 base > threshold（即 R < 1）才需要考慮補強
         if R >= 1.0:
             continue
 
@@ -113,10 +125,10 @@ def _compute_precise_dose_for_hour(
             continue
 
         A_t = (m_c / 200.0) * (k_a / (k_a - k_c)) * phi
-        # guard A_t tiny or negative
+        if DEBUG:
+            print(f"[dose] A_t={A_t}")
+
         if A_t <= 0:
-            if DEBUG:
-                print(f"[dose] A_t non-positive: {A_t}")
             continue
 
         required = (1.0 / R - 1.0) / A_t
@@ -126,21 +138,23 @@ def _compute_precise_dose_for_hour(
         if required > best_required:
             best_required = required
 
-    # If nothing needed
     if best_required <= 0:
         return 0.0
 
-    # Protect against tiny fractional required values that would be rounded up to one DOSE_STEP
-    # (avoid returning 25 mg for trivial tiny requirements)
-    MIN_EFFECTIVE_FRACTION = 0.1  # if required < DOSE_STEP * 0.5 -> treat as 0
-    if best_required < DOSE_STEP * MIN_EFFECTIVE_FRACTION:
+    # 更保守的策略：若 required < DOSE_STEP，視為不需要（避免把 1-24 mg 抬到 25）
+    if best_required < DOSE_STEP:
         if DEBUG:
-            print(f"[dose] best_required {best_required} < {DOSE_STEP * MIN_EFFECTIVE_FRACTION} -> treat as 0")
+            print(f"[dose] best_required {best_required:.3f} < DOSE_STEP ({DOSE_STEP}) -> 0")
         return 0.0
 
-    steps = int(np.ceil(best_required / DOSE_STEP))
-    return steps * DOSE_STEP
-
+    # 回傳最接近的步數（round）。若希望偏向保守可改成 ceil。
+    steps = int(round(best_required / DOSE_STEP))
+    if steps <= 0:
+        steps = 1
+    dose = steps * DOSE_STEP
+    if DEBUG:
+        print(f"[dose] best_required={best_required:.3f} -> steps={steps}, dose={dose}")
+    return dose
 
 
 def _apply_dose_to_gpd(
@@ -165,6 +179,10 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
     user_params_map 格式: 
       { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
+    行為改動：
+      - 使用 WINDOW_HOURS（預設 4）來計算 required
+      - enforce MIN_INTERVAL_HOURS（預設 3）避免短時間重複給小劑量
+      - 若 recommendations 非空則刪除舊推薦（基於 source_data_latest_at 邏輯保留）
     """
     cur = conn.cursor()
     try:
@@ -189,13 +207,16 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
 
         user_ids = _get_distinct_user_ids(cur)
         if not user_ids:
-            print("沒有可處理的使用者（沒有清醒/睡眠資料）")
+            if DEBUG:
+                print("沒有可處理的使用者（沒有清醒/睡眠資料）")
             return
 
         for uid in user_ids:
             latest_source_ts = _get_latest_source_ts(cur, uid)
             last_processed_ts = _get_last_processed_ts_for_rec(cur, uid)
             if latest_source_ts <= last_processed_ts:
+                if DEBUG:
+                    print(f"[user {uid}] no new source data (latest_source_ts <= last_processed_ts)")
                 continue
 
             params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
@@ -221,6 +242,8 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             sleep_rows = cur.fetchall()
 
             if not waking_periods or not sleep_rows:
+                if DEBUG:
+                    print(f"[user {uid}] skipping: missing waking_periods or sleep_rows")
                 continue
 
             sleep_intervals = [(r[1], r[2]) for r in sleep_rows]
@@ -250,6 +273,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
 
                 daily_dose = 0.0
                 intake_schedule = []
+                last_recommend_hour = -999  # 用整數 hour index 記錄上次建議位置（相對於 target_start_time 的 hour）
 
                 for hour in range(24):
                     recommended_time = target_start_time.replace(hour=hour, minute=0, second=0, microsecond=0)
@@ -285,8 +309,17 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     if dose_to_give <= 0.0:
                         continue
 
+                    # enforce minimal spacing between recommendations
+                    if last_recommend_hour != -999:
+                        if (hour - last_recommend_hour) < MIN_INTERVAL_HOURS:
+                            if DEBUG:
+                                print(f"[user {uid}] skip hour {hour} due to MIN_INTERVAL_HOURS (last {last_recommend_hour})")
+                            continue
+
+                    # accept this recommendation
                     intake_schedule.append((uid, dose_to_give, recommended_time))
                     daily_dose += dose_to_give
+                    last_recommend_hour = hour
 
                     _apply_dose_to_gpd(g_PD, dose_to_give, hour, m_c, k_a, k_c)
                     P_t = P0_values * g_PD
@@ -299,6 +332,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 recommendations.extend(filtered)
 
             if recommendations:
+                # 覆蓋策略保留：刪除舊的（較舊 source_data_latest_at 的）並插入新的推薦
                 cur.execute("""
                     DELETE FROM recommendations_caffeine
                     WHERE user_id = %s
@@ -315,9 +349,12 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     [(r[0], r[1], r[2], latest_source_ts) for r in recommendations]
                 )
                 conn.commit()
+                if DEBUG:
+                    print(f"[user {uid}] inserted {len(recommendations)} recommendations")
 
     except Exception as e:
         conn.rollback()
         print(f"執行咖啡因建議計算時發生錯誤: {e}")
+        raise
     finally:
         cur.close()
