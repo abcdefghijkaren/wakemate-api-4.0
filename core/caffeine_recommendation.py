@@ -10,6 +10,9 @@ DOSE_STEP = 25.0
 MAX_DAILY_DOSE = 300.0
 WINDOW_HOURS = 2
 
+# Merge / dedupe config (seconds)
+MERGE_SECONDS = 3600  # 合併 1 小時內的推薦成一筆
+
 
 def _get_distinct_user_ids(cursor):
     cursor.execute("""
@@ -72,7 +75,7 @@ def _compute_precise_dose_for_hour(
     t_len = len(P0_values)
 
     # sanity checks
-    if k_a == k_c:
+    if abs(k_a - k_c) < 1e-12:
         # 避免除以零
         if DEBUG:
             print(f"[dose] k_a == k_c ({k_a}) — 返回 0")
@@ -105,7 +108,15 @@ def _compute_precise_dose_for_hour(
             continue
 
         delta = float(offset)
-        phi = np.exp(-k_c * delta) - np.exp(-k_a * delta)
+        # compute phi safely
+        try:
+            phi = np.exp(-k_c * delta) - np.exp(-k_a * delta)
+        except OverflowError:
+            # numerical protection: if overflow, skip this offset
+            if DEBUG:
+                print(f"[dose] phi overflow at delta={delta}, k_c={k_c}, k_a={k_a}")
+            continue
+
         if DEBUG:
             print(f"[dose] phi={phi}")
 
@@ -132,7 +143,7 @@ def _compute_precise_dose_for_hour(
 
     # Protect against tiny fractional required values that would be rounded up to one DOSE_STEP
     # (avoid returning 25 mg for trivial tiny requirements)
-    MIN_EFFECTIVE_FRACTION = 0.1  # if required < DOSE_STEP * 0.5 -> treat as 0
+    MIN_EFFECTIVE_FRACTION = 0.1
     if best_required < DOSE_STEP * MIN_EFFECTIVE_FRACTION:
         if DEBUG:
             print(f"[dose] best_required {best_required} < {DOSE_STEP * MIN_EFFECTIVE_FRACTION} -> treat as 0")
@@ -140,7 +151,6 @@ def _compute_precise_dose_for_hour(
 
     steps = int(np.ceil(best_required / DOSE_STEP))
     return steps * DOSE_STEP
-
 
 
 def _apply_dose_to_gpd(
@@ -151,19 +161,54 @@ def _apply_dose_to_gpd(
     k_a: float,
     k_c: float
 ) -> None:
+    # do nothing for zero dose
     if dose_mg <= 0:
         return
+    # guard against extremely out-of-range hour_idx to avoid exp overflow
+    # hour_idx is relative to the g_PD array index
     t = np.arange(len(g_PD))
     t0 = hour_idx
-    effect = 1.0 / (1.0 + (m_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
-                    (np.exp(-k_c * (t - t0)) - np.exp(-k_a * (t - t0))))
+    # If t0 is far in the future relative to t, the exponent can overflow.
+    # Only apply when t0 is within a reasonable range.
+    if t0 > len(t) + 1000 or t0 < -1000:
+        return
+    # compute effect with vectorized ops (numpy handles large magnitudes)
+    # but we protect against invalid operations by using np.errstate
+    with np.errstate(over='ignore', invalid='ignore'):
+        effect = 1.0 / (1.0 + (m_c * dose_mg / 200.0) * (k_a / (k_a - k_c)) *
+                        (np.exp(-k_c * (t - t0)) - np.exp(-k_a * (t - t0))))
+    # replace invalid / nan with 1.0 (no effect) to be conservative
+    effect = np.where(np.isfinite(effect), effect, 1.0)
     effect = np.where(t < t0, 1.0, effect)
     g_PD *= effect
 
 
+def _merge_recommendations_list(recs):
+    """
+    recs: list of (user_id, dose, when)
+    merge entries with same user and within MERGE_SECONDS into a single record by summing dose.
+    Keep the earlier timestamp as the representative time.
+    """
+    if not recs:
+        return []
+    recs_sorted = sorted(recs, key=lambda x: (x[0], x[2]))
+    merged = []
+    for uid_, dose_, when_ in recs_sorted:
+        if not merged:
+            merged.append((uid_, dose_, when_))
+            continue
+        puid, pdose, pwhen = merged[-1]
+        if uid_ == puid and abs((when_ - pwhen).total_seconds()) <= MERGE_SECONDS:
+            # merge into previous; keep earlier timestamp (pwhen)
+            merged[-1] = (puid, pdose + dose_, pwhen)
+        else:
+            merged.append((uid_, dose_, when_))
+    return merged
+
+
 def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
-    user_params_map 格式: 
+    user_params_map 格式:
       { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
     """
     cur = conn.cursor()
@@ -173,14 +218,14 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             user_params_map = {}
             try:
                 cur.execute("""
-                    SELECT user_id, m_c, k_a, k_c, trait_alertness, p0_value 
+                    SELECT user_id, m_c, k_a, k_c, trait_alertness, p0_value
                     FROM users_params;
                 """)
                 for r in cur.fetchall():
                     user_params_map[r[0]] = {
-                        "m_c": float(r[1]),
-                        "k_a": float(r[2]),
-                        "k_c": float(r[3]),
+                        "m_c": float(r[1]) if r[1] is not None else 1.0,
+                        "k_a": float(r[2]) if r[2] is not None else 1.25,
+                        "k_c": float(r[3]) if r[3] is not None else 0.20,
                         "trait": float(r[4] or 0.0),
                         "p0_value": float(r[5] or 270.0)
                     }
@@ -220,13 +265,24 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             """, (uid,))
             sleep_rows = cur.fetchall()
 
+            # fetch actual intakes for this user once (used to initialize g_PD and to skip exact-time recommendations)
+            cur.execute("""
+                SELECT taking_timestamp, caffeine_amount
+                FROM users_real_time_intake
+                WHERE user_id = %s
+                ORDER BY taking_timestamp
+            """, (uid,))
+            caf_rows = cur.fetchall()  # list of (taking_timestamp, caffeine_amount)
+
             if not waking_periods or not sleep_rows:
                 continue
 
             sleep_intervals = [(r[1], r[2]) for r in sleep_rows]
-            recommendations = []
+            # we'll collect recommendations per-window and insert per-window (so we can per-window delete)
+            all_insert_rows = []
 
             for _, target_start_time, target_end_time in waking_periods:
+                # For each waking period, simulate 24h grid anchored at target_start_time
                 total_hours = 24
                 t = np.arange(0, total_hours + 1)
 
@@ -245,12 +301,35 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                         # 清醒：baseline + circadian + trait
                         P0_values[h] = (270.0 + _sigmoid(h)) + trait
 
+                # initialize g_PD and apply existing real intakes so the simulation reflects reality
                 g_PD = np.ones_like(t, dtype=float)
+                intake_time_to_amount = {}
+                for (take_ts, amt) in caf_rows:
+                    if take_ts is None:
+                        continue
+                    try:
+                        hour_idx = int((take_ts - target_start_time).total_seconds() // 3600)
+                    except Exception:
+                        continue
+                    # apply only when hour_idx is within reasonable window to avoid numerical instability
+                    if -len(t) <= hour_idx < len(t) + 1:
+                        try:
+                            _apply_dose_to_gpd(g_PD, float(amt), hour_idx, m_c, k_a, k_c)
+                        except Exception:
+                            # defensive: ignore apply errors for out-of-range or numerical problems
+                            pass
+                    # record mapping for exact-time skip logic (sum if multiple same ts)
+                    if take_ts in intake_time_to_amount:
+                        intake_time_to_amount[take_ts] += float(amt)
+                    else:
+                        intake_time_to_amount[take_ts] = float(amt)
+
                 P_t = P0_values * g_PD
 
                 daily_dose = 0.0
                 intake_schedule = []
 
+                # iterate hours and propose doses
                 for hour in range(24):
                     recommended_time = target_start_time.replace(hour=hour, minute=0, second=0, microsecond=0)
 
@@ -271,6 +350,10 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     if P_t[hour] <= ALERTNESS_THRESHOLD:
                         continue
 
+                    # 如果該 exact timestamp 已有使用者實際攝取，則跳過推薦（避免重複）
+                    if recommended_time in intake_time_to_amount:
+                        continue
+
                     dose_needed = _compute_precise_dose_for_hour(
                         hour_idx=hour,
                         P0_values=P0_values,
@@ -288,23 +371,39 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     intake_schedule.append((uid, dose_to_give, recommended_time))
                     daily_dose += dose_to_give
 
+                    # apply proposed dose to g_PD for subsequent hours in this window's simulation
                     _apply_dose_to_gpd(g_PD, dose_to_give, hour, m_c, k_a, k_c)
                     P_t = P0_values * g_PD
 
-                filtered = [
+                # filter intake_schedule to the target window (should already be)
+                period_recommendations = [
                     (uid, dose, when)
                     for (uid, dose, when) in intake_schedule
                     if target_start_time <= when <= target_end_time
                 ]
-                recommendations.extend(filtered)
 
-            if recommendations:
+                # merge close/duplicate recs within this period
+                merged = _merge_recommendations_list(period_recommendations)
+
+                # delete only recommendations within this period for this user that are older snapshots
                 cur.execute("""
                     DELETE FROM recommendations_caffeine
                     WHERE user_id = %s
+                      AND recommended_caffeine_intake_timing >= %s
+                      AND recommended_caffeine_intake_timing < %s
                       AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
-                """, (uid, latest_source_ts))
+                """, (uid, target_start_time, target_end_time, latest_source_ts))
 
+                # prepare insert rows for this period
+                for (u, d, when) in merged:
+                    all_insert_rows.append((u, d, when, latest_source_ts))
+
+            # after processing all waking_periods for this user, do a final dedupe/merge across periods
+            all_insert_rows_merged = _merge_recommendations_list([(r[0], r[1], r[2]) for r in all_insert_rows])
+
+            if all_insert_rows_merged:
+                # convert back to rows with source_data_latest_at
+                values = [(r[0], r[1], r[2], latest_source_ts) for r in all_insert_rows_merged]
                 execute_values(
                     cur,
                     """
@@ -312,7 +411,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing, source_data_latest_at)
                     VALUES %s
                     """,
-                    [(r[0], r[1], r[2], latest_source_ts) for r in recommendations]
+                    values
                 )
                 conn.commit()
 
