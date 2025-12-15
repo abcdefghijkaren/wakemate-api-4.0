@@ -410,10 +410,18 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     INSERT INTO recommendations_caffeine
                     (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing, source_data_latest_at)
                     VALUES %s
+                    ON CONFLICT (user_id, recommended_caffeine_intake_timing)
+                    DO UPDATE SET
+                    recommended_caffeine_amount = EXCLUDED.recommended_caffeine_amount,
+                    source_data_latest_at = EXCLUDED.source_data_latest_at,
+                    updated_at = NOW()
+                    WHERE recommendations_caffeine.source_data_latest_at IS NULL
+                    OR EXCLUDED.source_data_latest_at > recommendations_caffeine.source_data_latest_at
                     """,
                     values
                 )
                 conn.commit()
+
 
     except Exception as e:
         conn.rollback()
