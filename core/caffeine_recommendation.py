@@ -389,10 +389,12 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 cur.execute("""
                     DELETE FROM recommendations_caffeine
                     WHERE user_id = %s
-                      AND recommended_caffeine_intake_timing >= %s
-                      AND recommended_caffeine_intake_timing < %s
-                      AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
+                    AND recommended_caffeine_intake_timing >= %s
+                    AND recommended_caffeine_intake_timing < %s
+                    AND recommended_caffeine_intake_timing >= NOW()
+                    AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
                 """, (uid, target_start_time, target_end_time, latest_source_ts))
+
 
                 # prepare insert rows for this period
                 for (u, d, when) in merged:
@@ -403,24 +405,33 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
 
             if all_insert_rows_merged:
                 # convert back to rows with source_data_latest_at
+                # 只存未來
                 values = [(r[0], r[1], r[2], latest_source_ts) for r in all_insert_rows_merged]
-                execute_values(
-                    cur,
-                    """
-                    INSERT INTO recommendations_caffeine
-                    (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing, source_data_latest_at)
-                    VALUES %s
-                    ON CONFLICT (user_id, recommended_caffeine_intake_timing)
-                    DO UPDATE SET
-                    recommended_caffeine_amount = EXCLUDED.recommended_caffeine_amount,
-                    source_data_latest_at = EXCLUDED.source_data_latest_at,
-                    updated_at = NOW()
-                    WHERE recommendations_caffeine.source_data_latest_at IS NULL
-                    OR EXCLUDED.source_data_latest_at > recommendations_caffeine.source_data_latest_at
-                    """,
-                    values
-                )
-                conn.commit()
+
+                cur.execute("SELECT NOW()")
+                db_now = cur.fetchone()[0]
+                values = [v for v in values if v[2] is not None and v[2] >= db_now]
+
+                if values:
+                    execute_values(
+                        cur,
+                        """
+                        INSERT INTO recommendations_caffeine
+                        (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing, source_data_latest_at)
+                        VALUES %s
+                        ON CONFLICT (user_id, recommended_caffeine_intake_timing)
+                        DO UPDATE SET
+                        recommended_caffeine_amount = EXCLUDED.recommended_caffeine_amount,
+                        source_data_latest_at = EXCLUDED.source_data_latest_at,
+                        updated_at = NOW()
+                        WHERE (recommendations_caffeine.source_data_latest_at IS NULL
+                        OR EXCLUDED.source_data_latest_at > recommendations_caffeine.source_data_latest_at)
+                        AND recommendations_caffeine.recommended_caffeine_intake_timing >= NOW()
+                        """,
+                        values
+                    )
+                    conn.commit()
+
 
 
     except Exception as e:
