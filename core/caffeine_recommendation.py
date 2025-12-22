@@ -386,14 +386,15 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 merged = _merge_recommendations_list(period_recommendations)
 
                 # delete only recommendations within this period for this user that are older snapshots
-                cur.execute("""
-                    DELETE FROM recommendations_caffeine
-                    WHERE user_id = %s
-                    AND recommended_caffeine_intake_timing >= %s
-                    AND recommended_caffeine_intake_timing < %s
-                    AND recommended_caffeine_intake_timing >= NOW()
-                    AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
-                """, (uid, target_start_time, target_end_time, latest_source_ts))
+                for (u, d, when) in merged:
+                    cur.execute("""
+                        DELETE FROM recommendations_caffeine
+                        WHERE user_id = %s
+                        AND recommended_caffeine_amount = %s
+                        AND recommended_caffeine_intake_timing = %s
+                        AND recommended_caffeine_intake_timing >= NOW()
+                        AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
+                    """, (uid, d, when, latest_source_ts))
 
 
                 # prepare insert rows for this period
