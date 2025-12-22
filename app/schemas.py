@@ -169,9 +169,11 @@ class RecommendationsCaffeine_DB_Response(BaseModel):
     recommended_caffeine_intake_timing: Optional[datetime]
     updated_at: datetime
     source_data_latest_at: Optional[datetime]
+    is_active: bool
+    run_id: Optional[UUID]
 
     class Config:
-        from_attributes = True  # 替代 orm_mode = True
+        from_attributes = True
 
 
 

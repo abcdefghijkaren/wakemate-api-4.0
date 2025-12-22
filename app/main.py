@@ -1,7 +1,7 @@
 # app/main.py
 from fastapi import FastAPI, HTTPException, Depends, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, desc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql import func
 from app import models, schemas
@@ -350,12 +350,23 @@ def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):
 
 
 @app.get("/recommendations/", response_model=list[schemas.RecommendationsCaffeine_DB_Response])
-def get_recommendations(user_id: UUID = Query(None), db: Session = Depends(get_db)):
-    query = db.query(RecommendationsCaffeine)
-    if user_id:
-        query = query.filter(RecommendationsCaffeine.user_id == user_id)
-    return query.all()
+def get_recommendations(
+        user_id: UUID = Query(...),
+        active_only: bool = Query(True),
+        limit: int = Query(200, ge=1, le=2000),
+        db: Session = Depends(get_db)
+    ):
+        query = db.query(RecommendationsCaffeine).filter(RecommendationsCaffeine.user_id == user_id)
 
+        if active_only:
+            query = query.filter(RecommendationsCaffeine.is_active == True)
+
+        query = query.order_by(
+            RecommendationsCaffeine.recommended_caffeine_intake_timing.asc(),
+            RecommendationsCaffeine.updated_at.desc()
+        )
+
+        return query.limit(limit).all()
 
 @app.get("/alertness_data/", response_model=list[schemas.AlertnessData_DB_Response])
 def get_alertness_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):

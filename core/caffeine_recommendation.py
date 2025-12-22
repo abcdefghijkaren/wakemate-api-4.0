@@ -210,7 +210,15 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
     """
     user_params_map 格式:
       { user_id: {"m_c": float, "k_a": float, "k_c": float, "trait": float, "p0_value": float}, ... }
+
+    DB 寫入策略：
+    - 不刪歷史推薦
+    - 每次對某個 user 產生新推薦時：
+        1) 將該 user 目前所有「未來」且 is_active=true 的推薦標為 inactive
+        2) 插入本次 run 的推薦（同一個 run_id，is_active=true）
     """
+    from uuid import uuid4
+
     cur = conn.cursor()
     try:
         # 載入使用者參數
@@ -243,7 +251,10 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             if latest_source_ts <= last_processed_ts:
                 continue
 
-            params = user_params_map.get(uid, {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0})
+            params = user_params_map.get(
+                uid,
+                {"m_c": 1.0, "k_a": 1.25, "k_c": 0.20, "trait": 0.0, "p0_value": 270.0}
+            )
             m_c, k_a, k_c, trait, p0_value = (
                 params["m_c"], params["k_a"], params["k_c"], params["trait"], params["p0_value"]
             )
@@ -278,7 +289,8 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 continue
 
             sleep_intervals = [(r[1], r[2]) for r in sleep_rows]
-            # we'll collect recommendations per-window and insert per-window (so we can per-window delete)
+
+            # collect recommendations across all waking periods
             all_insert_rows = []
 
             for _, target_start_time, target_end_time in waking_periods:
@@ -304,6 +316,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 # initialize g_PD and apply existing real intakes so the simulation reflects reality
                 g_PD = np.ones_like(t, dtype=float)
                 intake_time_to_amount = {}
+
                 for (take_ts, amt) in caf_rows:
                     if take_ts is None:
                         continue
@@ -311,13 +324,14 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                         hour_idx = int((take_ts - target_start_time).total_seconds() // 3600)
                     except Exception:
                         continue
+
                     # apply only when hour_idx is within reasonable window to avoid numerical instability
                     if -len(t) <= hour_idx < len(t) + 1:
                         try:
                             _apply_dose_to_gpd(g_PD, float(amt), hour_idx, m_c, k_a, k_c)
                         except Exception:
-                            # defensive: ignore apply errors for out-of-range or numerical problems
                             pass
+
                     # record mapping for exact-time skip logic (sum if multiple same ts)
                     if take_ts in intake_time_to_amount:
                         intake_time_to_amount[take_ts] += float(amt)
@@ -385,18 +399,6 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 # merge close/duplicate recs within this period
                 merged = _merge_recommendations_list(period_recommendations)
 
-                # delete only recommendations within this period for this user that are older snapshots
-                for (u, d, when) in merged:
-                    cur.execute("""
-                        DELETE FROM recommendations_caffeine
-                        WHERE user_id = %s
-                        AND recommended_caffeine_amount = %s
-                        AND recommended_caffeine_intake_timing = %s
-                        AND recommended_caffeine_intake_timing >= NOW()
-                        AND (source_data_latest_at IS NULL OR source_data_latest_at < %s)
-                    """, (uid, d, when, latest_source_ts))
-
-
                 # prepare insert rows for this period
                 for (u, d, when) in merged:
                     all_insert_rows.append((u, d, when, latest_source_ts))
@@ -405,35 +407,41 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             all_insert_rows_merged = _merge_recommendations_list([(r[0], r[1], r[2]) for r in all_insert_rows])
 
             if all_insert_rows_merged:
-                # convert back to rows with source_data_latest_at
                 # 只存未來
-                values = [(r[0], r[1], r[2], latest_source_ts) for r in all_insert_rows_merged]
-
                 cur.execute("SELECT NOW()")
                 db_now = cur.fetchone()[0]
+
+                values = [(r[0], r[1], r[2], latest_source_ts) for r in all_insert_rows_merged]
                 values = [v for v in values if v[2] is not None and v[2] >= db_now]
 
                 if values:
+                    # 這次「整批推薦」共用同一個 run_id
+                    this_run_id = uuid4()
+
+                    # 先把該 user 目前未來的 active 推薦全部關掉（保留歷史，不刪）
+                    cur.execute("""
+                        UPDATE recommendations_caffeine
+                        SET is_active = FALSE
+                        WHERE user_id = %s
+                          AND is_active = TRUE
+                          AND recommended_caffeine_intake_timing >= NOW()
+                    """, (uid,))
+
+                    # 插入本次 run 的推薦：is_active=true + run_id
+                    # 使用 ON CONFLICT DO NOTHING（最安全，不依賴你現在 unique constraint 長怎樣）
                     execute_values(
                         cur,
                         """
                         INSERT INTO recommendations_caffeine
-                        (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing, source_data_latest_at)
+                        (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing,
+                         source_data_latest_at, run_id, is_active)
                         VALUES %s
-                        ON CONFLICT (user_id, recommended_caffeine_intake_timing)
-                        DO UPDATE SET
-                        recommended_caffeine_amount = EXCLUDED.recommended_caffeine_amount,
-                        source_data_latest_at = EXCLUDED.source_data_latest_at,
-                        updated_at = NOW()
-                        WHERE (recommendations_caffeine.source_data_latest_at IS NULL
-                        OR EXCLUDED.source_data_latest_at > recommendations_caffeine.source_data_latest_at)
-                        AND recommendations_caffeine.recommended_caffeine_intake_timing >= NOW()
+                        ON CONFLICT DO NOTHING
                         """,
-                        values
+                        [(u, d, when, src_ts, this_run_id, True) for (u, d, when, src_ts) in values]
                     )
+
                     conn.commit()
-
-
 
     except Exception as e:
         conn.rollback()

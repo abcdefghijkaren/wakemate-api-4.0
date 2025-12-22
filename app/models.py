@@ -4,6 +4,7 @@ from sqlalchemy import (
     Float, Boolean, ForeignKey
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship
 from .database import Base
 import uuid
@@ -105,7 +106,8 @@ class RecommendationsCaffeine(Base):
     recommended_caffeine_intake_timing = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     source_data_latest_at = Column(DateTime(timezone=True), nullable=True)
-
+    is_active = Column(Boolean, nullable=False, default=True)
+    run_id = Column(PG_UUID(as_uuid=True), nullable=True)
     user = relationship("User", back_populates="recommendations")
 
 
