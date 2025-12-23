@@ -428,7 +428,7 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     """, (uid,))
 
                     # 插入本次 run 的推薦：is_active=true + run_id
-                    # 使用 ON CONFLICT DO NOTHING（最安全，不依賴你現在 unique constraint 長怎樣）
+                    # 用「active unique index」做 conflict inference，避免插入被覆蓋導致全部 false
                     execute_values(
                         cur,
                         """
@@ -436,7 +436,14 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                         (user_id, recommended_caffeine_amount, recommended_caffeine_intake_timing,
                          source_data_latest_at, run_id, is_active)
                         VALUES %s
-                        ON CONFLICT DO NOTHING
+                        ON CONFLICT (user_id, recommended_caffeine_intake_timing)
+                        WHERE is_active = TRUE
+                        DO UPDATE SET
+                          recommended_caffeine_amount = EXCLUDED.recommended_caffeine_amount,
+                          source_data_latest_at = EXCLUDED.source_data_latest_at,
+                          run_id = EXCLUDED.run_id,
+                          is_active = TRUE,
+                          updated_at = NOW()
                         """,
                         [(u, d, when, src_ts, this_run_id, True) for (u, d, when, src_ts) in values]
                     )
