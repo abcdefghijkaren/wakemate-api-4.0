@@ -3,6 +3,7 @@ import psycopg2
 from datetime import timedelta
 from typing import Optional, Tuple, List
 from statistics import mean
+from baseline_rt import compute_baseline_rt
 
 # Config / 超參數（可調）
 ALPHA_TRAIT = 0.12        # trait EMA learning rate (kss<=4)
@@ -25,13 +26,14 @@ DEFAULTS = {
 def _sigmoid(hour: int, L: float = 100.0, x0: float = 14.0, k: float = 0.2) -> float:
     return L / (1.0 + np.exp(-k * (hour - x0)))
 
-def _predict_rt_single(t_obs, sleep_intervals: List[Tuple], intakes: List[Tuple],
-                       m_c: float, k_a: float, k_c: float) -> float:
+def _predict_rt_single(t_obs, sleep_intervals, intakes,
+                       m_c: float, k_a: float, k_c: float,
+                       p0_value: float, trait: float = 0.0) -> float:
     """
-    對單一時間點 t_obs 預測 mean RT (不含 trait offset)。
+    對單一時間點 t_obs 預測 mean RT (ms)。
+    baseline 改為：p0_value + circadian + sleep debt（超睡不加分）。
     """
-    asleep = any(start <= t_obs < end for (start, end) in sleep_intervals)
-    base = 270.0 if asleep else (270.0 + _sigmoid(t_obs.hour))
+    base = compute_baseline_rt(t_obs, sleep_intervals, p0_value, trait=trait)
 
     g = 1.0
     for (take_time, dose) in intakes:
@@ -48,6 +50,7 @@ def _predict_rt_single(t_obs, sleep_intervals: List[Tuple], intakes: List[Tuple]
         g *= eff
 
     return base * g
+
 
 # --- DB helper functions ---
 def fetch_user_params(cur, user_id):
@@ -280,9 +283,17 @@ def maybe_update_kc_for_user(conn, user_id,
             se = 0.0
             n = 0
             for (test_at, mean_rt) in usable_rows:
-                y_hat = _predict_rt_single(test_at, sleep_intervals, intakes,
-                                           m_c, k_a, kc_cand)
-                y_hat_adjusted = y_hat + (trait or 0.0)
+                p0_value = params.get("p0_value", DEFAULTS["p0_value"])
+
+                y_hat = _predict_rt_single(
+                    test_at, sleep_intervals, intakes,
+                    m_c, k_a, kc_cand,
+                    p0_value=p0_value, trait=0.0
+                )
+
+                # 不做 +trait，因為 p0_value 已經是 270+trait_new
+                y_hat_adjusted = y_hat
+
                 err = (float(mean_rt) - y_hat_adjusted) ** 2
                 se += err
                 n += 1

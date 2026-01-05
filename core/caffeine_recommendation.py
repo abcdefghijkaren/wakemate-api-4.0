@@ -3,6 +3,8 @@ import numpy as np
 from psycopg2.extras import execute_values
 from datetime import timedelta
 from typing import Dict, Optional
+from baseline_rt import compute_baseline_rt
+
 
 ALERTNESS_THRESHOLD = 270.0  # 目標上限（ms）
 FORBIDDEN_HOURS_BEFORE_SLEEP = 6
@@ -294,82 +296,86 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
             all_insert_rows = []
 
             for _, target_start_time, target_end_time in waking_periods:
-                # For each waking period, simulate 24h grid anchored at target_start_time
-                total_hours = 24
-                t = np.arange(0, total_hours + 1)
+                # =========================================================
+                # Continuous time_index (hourly) to support cross-day shifts
+                # =========================================================
+                # 對齊到整點：start 向下取整點，end 向上補到下一個整點（確保包含尾端）
+                period_start = target_start_time.replace(minute=0, second=0, microsecond=0)
+                if target_end_time.minute != 0 or target_end_time.second != 0 or target_end_time.microsecond != 0:
+                    period_end = (target_end_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+                else:
+                    period_end = target_end_time
 
-                P0_values = np.zeros_like(t, dtype=float)
-                awake_flags = np.ones_like(t, dtype=bool)
+                total_hours = int((period_end - period_start).total_seconds() // 3600)
+                if total_hours <= 0:
+                    continue
 
-                for h in range(24):
-                    now_dt = target_start_time.replace(hour=h, minute=0, second=0, microsecond=0)
+                time_index = [period_start + timedelta(hours=i) for i in range(total_hours + 1)]
+
+                # arrays aligned to time_index
+                P0_values = np.zeros(len(time_index), dtype=float)
+                awake_flags = np.ones(len(time_index), dtype=bool)
+
+                for i, now_dt in enumerate(time_index):
                     asleep = any(start <= now_dt < end for (start, end) in sleep_intervals)
-                    awake_flags[h] = (not asleep)
+                    awake_flags[i] = (not asleep)
 
-                    if asleep:
-                        # 睡眠：固定 baseline + trait
-                        P0_values[h] = 270.0 + trait
-                    else:
-                        # 清醒：baseline + circadian + trait
-                        P0_values[h] = (270.0 + _sigmoid(h)) + trait
+                    # 方案A：p0_value 已包含 trait（你的 users_params: p0=270+trait_new）
+                    P0_values[i] = compute_baseline_rt(now_dt, sleep_intervals, p0_value, trait=0.0)
 
                 # initialize g_PD and apply existing real intakes so the simulation reflects reality
-                g_PD = np.ones_like(t, dtype=float)
+                g_PD = np.ones(len(time_index), dtype=float)
                 intake_time_to_amount = {}
 
                 for (take_ts, amt) in caf_rows:
                     if take_ts is None:
                         continue
-                    try:
-                        hour_idx = int((take_ts - target_start_time).total_seconds() // 3600)
-                    except Exception:
-                        continue
 
-                    # apply only when hour_idx is within reasonable window to avoid numerical instability
-                    if -len(t) <= hour_idx < len(t) + 1:
+                    # 將攝取時間投影到 time_index 的 index
+                    hour_idx = int((take_ts - period_start).total_seconds() // 3600)
+
+                    # 只在合理範圍內套用，避免數值不穩
+                    if -len(time_index) <= hour_idx < len(time_index) + 1:
                         try:
                             _apply_dose_to_gpd(g_PD, float(amt), hour_idx, m_c, k_a, k_c)
                         except Exception:
                             pass
 
-                    # record mapping for exact-time skip logic (sum if multiple same ts)
-                    if take_ts in intake_time_to_amount:
-                        intake_time_to_amount[take_ts] += float(amt)
-                    else:
-                        intake_time_to_amount[take_ts] = float(amt)
+                    # exact-time skip logic（避免同一 timestamp 推薦重複）
+                    try:
+                        intake_time_to_amount[take_ts] = intake_time_to_amount.get(take_ts, 0.0) + float(amt)
+                    except Exception:
+                        pass
 
                 P_t = P0_values * g_PD
 
                 daily_dose = 0.0
                 intake_schedule = []
 
-                # iterate hours and propose doses
-                for hour in range(24):
-                    recommended_time = target_start_time.replace(hour=hour, minute=0, second=0, microsecond=0)
-
-                    # 禁止睡前 6 小時
-                    in_forbidden = any(
-                        (sleep_start - timedelta(hours=6)) <= recommended_time < sleep_start
-                        for (sleep_start, sleep_end) in sleep_intervals
-                    )
-                    if in_forbidden:
+                # iterate through all time points inside the target window
+                for i, now_dt in enumerate(time_index):
+                    # 只推薦在目標清醒區間內
+                    if not (target_start_time <= now_dt <= target_end_time):
                         continue
 
-                    if not awake_flags[hour]:
+                    # 睡眠時段不推薦
+                    if not awake_flags[i]:
                         continue
 
-                    if not (target_start_time <= recommended_time <= target_end_time):
+                    # 禁止睡前 6 小時（用 sleep_start 定義禁區）
+                    if _is_in_forbidden_window(now_dt, sleep_intervals):
                         continue
 
-                    if P_t[hour] <= ALERTNESS_THRESHOLD:
+                    # 未超標就不推薦（你的 threshold 邏輯：P_t <= 270 不推）
+                    if P_t[i] <= ALERTNESS_THRESHOLD:
                         continue
 
-                    # 如果該 exact timestamp 已有使用者實際攝取，則跳過推薦（避免重複）
-                    if recommended_time in intake_time_to_amount:
+                    # 如果該 exact timestamp 已有實際攝取，跳過推薦
+                    if now_dt in intake_time_to_amount:
                         continue
 
                     dose_needed = _compute_precise_dose_for_hour(
-                        hour_idx=hour,
+                        hour_idx=i,
                         P0_values=P0_values,
                         g_PD_current=g_PD,
                         m_c=m_c, k_a=k_a, k_c=k_c,
@@ -382,26 +388,19 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                     if dose_to_give <= 0.0:
                         continue
 
-                    intake_schedule.append((uid, dose_to_give, recommended_time))
+                    intake_schedule.append((uid, dose_to_give, now_dt))
                     daily_dose += dose_to_give
 
-                    # apply proposed dose to g_PD for subsequent hours in this window's simulation
-                    _apply_dose_to_gpd(g_PD, dose_to_give, hour, m_c, k_a, k_c)
+                    # apply proposed dose forward on g_PD and refresh P_t
+                    _apply_dose_to_gpd(g_PD, dose_to_give, i, m_c, k_a, k_c)
                     P_t = P0_values * g_PD
 
-                # filter intake_schedule to the target window (should already be)
-                period_recommendations = [
-                    (uid, dose, when)
-                    for (uid, dose, when) in intake_schedule
-                    if target_start_time <= when <= target_end_time
-                ]
+                # merge close/duplicate recs within this period (works across day boundary too)
+                merged = _merge_recommendations_list(intake_schedule)
 
-                # merge close/duplicate recs within this period
-                merged = _merge_recommendations_list(period_recommendations)
-
-                # prepare insert rows for this period
                 for (u, d, when) in merged:
                     all_insert_rows.append((u, d, when, latest_source_ts))
+
 
             # after processing all waking_periods for this user, do a final dedupe/merge across periods
             all_insert_rows_merged = _merge_recommendations_list([(r[0], r[1], r[2]) for r in all_insert_rows])

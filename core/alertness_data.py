@@ -3,6 +3,7 @@ import numpy as np
 from datetime import timedelta
 from psycopg2.extras import execute_values
 from typing import List, Dict, Optional
+from baseline_rt import compute_baseline_rt
 
 def _get_user_ids_for_alertness(cursor):
     cursor.execute("""
@@ -153,15 +154,17 @@ def run_alertness_data(conn, user_params_map: Optional[Dict] = None):
                 asleep = any(start <= now_dt < end for (start, end) in sleep_rows)
                 awake_flags[i] = (not asleep)
 
-            # ---------- P_t_no_caffeine (自然清醒度) ----------
+            # ---------- P_t_no_caffeine (含睡眠債) ----------
             P_t_no_caffeine = np.zeros(len(time_index), dtype=float)
+            P0_values = np.zeros(len(time_index), dtype=float)
+
             for i, now_dt in enumerate(time_index):
-                hour = now_dt.hour
-                # 加上 trait（個人化偏移）
-                if awake_flags[i]:
-                    P_t_no_caffeine[i] = P0_base + sigmoid(hour) + trait
-                else:
-                    P_t_no_caffeine[i] = P0_base + trait
+                # p0_value 已含 trait（目前 users_params p0_value=270+trait_new）
+                # 所以這裡 trait 直接傳 0.0，避免 double count
+                base_rt = compute_baseline_rt(now_dt, sleep_rows, P0_base, trait=0.0)
+
+                P_t_no_caffeine[i] = base_rt
+                P0_values[i] = base_rt  # 讓 DB 的 p0_values 也反映當下 baseline
 
             # ---------- P0_values (使用者 p0_value, 我把 trait 一併加入 baseline) ----------
             P0_values = np.full(len(time_index), P0_base + trait, dtype=float)
