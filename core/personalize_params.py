@@ -3,7 +3,7 @@ import psycopg2
 from datetime import timedelta
 from typing import Optional, Tuple, List
 from statistics import mean
-from baseline_rt import compute_baseline_rt
+from .baseline_rt import compute_baseline_rt
 
 # Config / 超參數（可調）
 ALPHA_TRAIT = 0.12        # trait EMA learning rate (kss<=4)

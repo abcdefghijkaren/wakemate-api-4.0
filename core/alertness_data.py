@@ -3,7 +3,7 @@ import numpy as np
 from datetime import timedelta
 from psycopg2.extras import execute_values
 from typing import List, Dict, Optional
-from baseline_rt import compute_baseline_rt
+from .baseline_rt import compute_baseline_rt
 
 def _get_user_ids_for_alertness(cursor):
     cursor.execute("""

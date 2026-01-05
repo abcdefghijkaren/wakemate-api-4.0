@@ -3,7 +3,7 @@ import numpy as np
 from psycopg2.extras import execute_values
 from datetime import timedelta
 from typing import Dict, Optional
-from baseline_rt import compute_baseline_rt
+from .baseline_rt import compute_baseline_rt
 
 
 ALERTNESS_THRESHOLD = 270.0  # 目標上限（ms）
