@@ -191,20 +191,32 @@ def upsert_user_body_info(data: schemas.UsersBodyInfoCreate, db: Session = Depen
 @app.post("/users_sleep/", response_model=schemas.UsersRealSleepDataCreate_API_Response)
 def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depends(get_db)):
     try:
-        entry = models.UsersRealSleepData(**data.dict())
+        now = datetime.now(timezone.utc)
+
+        entry = models.UsersRealSleepData(
+            user_id=data.user_id,
+            sleep_start_time=data.sleep_start_time,
+            sleep_end_time=data.sleep_end_time,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=None
+        )
+
         db.add(entry)
         db.commit()
         db.refresh(entry)
 
-        # 即時觸發「批次」運算
         calc_result = trigger_calculation(entry.user_id)
 
-        # 回傳統一格式
         return {
             "status": "success",
             "id": entry.id,
             "calculation": calc_result
         }
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -214,20 +226,32 @@ def create_user_sleep(data: schemas.UsersRealSleepDataCreate, db: Session = Depe
 @app.post("/users_wake/", response_model=schemas.UsersTargetWakingPeriodCreate_API_Response)
 def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = Depends(get_db)):
     try:
-        entry = models.UsersTargetWakingPeriod(**data.dict())
+        now = datetime.now(timezone.utc)
+
+        entry = models.UsersTargetWakingPeriod(
+            user_id=data.user_id,
+            target_start_time=data.target_start_time,
+            target_end_time=data.target_end_time,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=None
+        )
+
         db.add(entry)
         db.commit()
         db.refresh(entry)
 
-        # 即時觸發「批次」運算
         calc_result = trigger_calculation(entry.user_id)
 
-        # 回傳統一格式
         return {
             "status": "success",
             "id": entry.id,
             "calculation": calc_result
         }
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -236,24 +260,36 @@ def create_user_wake(data: schemas.UsersTargetWakingPeriodCreate, db: Session = 
 @app.post("/users_intake/", response_model=schemas.UsersRealTimeIntakeCreate_API_Response)
 def create_user_intake(data: schemas.UsersRealTimeIntakeCreate, db: Session = Depends(get_db)):
     try:
-        entry = models.UsersRealTimeIntake(**data.dict())
+        now = datetime.now(timezone.utc)
+
+        entry = models.UsersRealTimeIntake(
+            user_id=data.user_id,
+            drink_name=data.drink_name,
+            caffeine_amount=data.caffeine_amount,
+            taking_timestamp=data.taking_timestamp,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=None
+        )
+
         db.add(entry)
         db.commit()
         db.refresh(entry)
 
-        # 即時觸發「批次」運算
         calc_result = trigger_calculation(entry.user_id)
 
-        # 回傳統一格式
         return {
             "status": "success",
             "id": entry.id,
             "calculation": calc_result
         }
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-
 
 from core.personalize_params import update_user_params
 @app.post("/users_pvt/", response_model=schemas.UsersPVTResultsCreate_API_Response)
@@ -320,27 +356,305 @@ def get_users_body_info(user_id: UUID = Query(None), db: Session = Depends(get_d
 
 @app.get("/users_sleep/", response_model=list[schemas.UsersRealSleepData_DB_Response])
 def get_sleep_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
-    query = db.query(UsersRealSleepData)
+    query = db.query(models.UsersRealSleepData).filter(
+        models.UsersRealSleepData.is_active == True,
+        models.UsersRealSleepData.deleted_at.is_(None),
+        models.UsersRealSleepData.invalidated_at.is_(None)
+    )
+
     if user_id:
-        query = query.filter(UsersRealSleepData.user_id == user_id)
+        query = query.filter(models.UsersRealSleepData.user_id == user_id)
+
+    query = query.order_by(models.UsersRealSleepData.sleep_start_time.desc())
+
     return query.all()
 
 
 @app.get("/users_wake/", response_model=list[schemas.UsersTargetWakingPeriod_DB_Response])
 def get_wake_target(user_id: UUID = Query(None), db: Session = Depends(get_db)):
-    query = db.query(UsersTargetWakingPeriod)
+    query = db.query(models.UsersTargetWakingPeriod).filter(
+        models.UsersTargetWakingPeriod.is_active == True,
+        models.UsersTargetWakingPeriod.deleted_at.is_(None),
+        models.UsersTargetWakingPeriod.invalidated_at.is_(None)
+    )
+
     if user_id:
-        query = query.filter(UsersTargetWakingPeriod.user_id == user_id)
+        query = query.filter(models.UsersTargetWakingPeriod.user_id == user_id)
+
+    query = query.order_by(models.UsersTargetWakingPeriod.target_start_time.desc())
+
     return query.all()
 
 
 @app.get("/users_intake/", response_model=list[schemas.UsersRealTimeIntake_DB_Response])
 def get_intake_data(user_id: UUID = Query(None), db: Session = Depends(get_db)):
-    query = db.query(UsersRealTimeIntake)
+    query = db.query(models.UsersRealTimeIntake).filter(
+        models.UsersRealTimeIntake.is_active == True,
+        models.UsersRealTimeIntake.deleted_at.is_(None),
+        models.UsersRealTimeIntake.invalidated_at.is_(None)
+    )
+
     if user_id:
-        query = query.filter(UsersRealTimeIntake.user_id == user_id)
+        query = query.filter(models.UsersRealTimeIntake.user_id == user_id)
+
+    query = query.order_by(models.UsersRealTimeIntake.taking_timestamp.desc())
+
     return query.all()
 
+# PUT 和 DELETE: 修改和刪除 sleep, wake, intake ================================================================================================
+@app.put("/users_sleep/{entry_id}", response_model=schemas.UsersRealSleepDataCreate_API_Response)
+def update_user_sleep(entry_id: int, data: schemas.UsersRealSleepDataUpdate, db: Session = Depends(get_db)):
+    try:
+        old_entry = db.query(models.UsersRealSleepData).filter(
+            models.UsersRealSleepData.id == entry_id,
+            models.UsersRealSleepData.is_active == True,
+            models.UsersRealSleepData.deleted_at.is_(None),
+            models.UsersRealSleepData.invalidated_at.is_(None)
+        ).first()
+
+        if not old_entry:
+            raise HTTPException(status_code=404, detail="Sleep entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        old_entry.is_active = False
+        old_entry.invalidated_at = now
+        old_entry.updated_at = now
+
+        new_entry = models.UsersRealSleepData(
+            user_id=old_entry.user_id,
+            sleep_start_time=data.sleep_start_time,
+            sleep_end_time=data.sleep_end_time,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=old_entry.id
+        )
+
+        db.add(new_entry)
+        db.commit()
+        db.refresh(new_entry)
+
+        calc_result = trigger_calculation(new_entry.user_id)
+
+        return {
+            "status": "success",
+            "id": new_entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/users_sleep/{entry_id}", response_model=schemas.UsersRealSleepDataCreate_API_Response)
+def delete_user_sleep(entry_id: int, db: Session = Depends(get_db)):
+    try:
+        entry = db.query(models.UsersRealSleepData).filter(
+            models.UsersRealSleepData.id == entry_id,
+            models.UsersRealSleepData.is_active == True,
+            models.UsersRealSleepData.deleted_at.is_(None),
+            models.UsersRealSleepData.invalidated_at.is_(None)
+        ).first()
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Sleep entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        entry.is_active = False
+        entry.deleted_at = now
+        entry.updated_at = now
+
+        db.commit()
+
+        calc_result = trigger_calculation(entry.user_id)
+
+        return {
+            "status": "success",
+            "id": entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@app.put("/users_wake/{entry_id}", response_model=schemas.UsersTargetWakingPeriodCreate_API_Response)
+def update_user_wake(entry_id: int, data: schemas.UsersTargetWakingPeriodUpdate, db: Session = Depends(get_db)):
+    try:
+        old_entry = db.query(models.UsersTargetWakingPeriod).filter(
+            models.UsersTargetWakingPeriod.id == entry_id,
+            models.UsersTargetWakingPeriod.is_active == True,
+            models.UsersTargetWakingPeriod.deleted_at.is_(None),
+            models.UsersTargetWakingPeriod.invalidated_at.is_(None)
+        ).first()
+
+        if not old_entry:
+            raise HTTPException(status_code=404, detail="Wake entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        old_entry.is_active = False
+        old_entry.invalidated_at = now
+        old_entry.updated_at = now
+
+        new_entry = models.UsersTargetWakingPeriod(
+            user_id=old_entry.user_id,
+            target_start_time=data.target_start_time,
+            target_end_time=data.target_end_time,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=old_entry.id
+        )
+
+        db.add(new_entry)
+        db.commit()
+        db.refresh(new_entry)
+
+        calc_result = trigger_calculation(new_entry.user_id)
+
+        return {
+            "status": "success",
+            "id": new_entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/users_wake/{entry_id}", response_model=schemas.UsersTargetWakingPeriodCreate_API_Response)
+def delete_user_wake(entry_id: int, db: Session = Depends(get_db)):
+    try:
+        entry = db.query(models.UsersTargetWakingPeriod).filter(
+            models.UsersTargetWakingPeriod.id == entry_id,
+            models.UsersTargetWakingPeriod.is_active == True,
+            models.UsersTargetWakingPeriod.deleted_at.is_(None),
+            models.UsersTargetWakingPeriod.invalidated_at.is_(None)
+        ).first()
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Wake entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        entry.is_active = False
+        entry.deleted_at = now
+        entry.updated_at = now
+
+        db.commit()
+
+        calc_result = trigger_calculation(entry.user_id)
+
+        return {
+            "status": "success",
+            "id": entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/users_intake/{entry_id}", response_model=schemas.UsersRealTimeIntakeCreate_API_Response)
+def update_user_intake(entry_id: int, data: schemas.UsersRealTimeIntakeUpdate, db: Session = Depends(get_db)):
+    try:
+        old_entry = db.query(models.UsersRealTimeIntake).filter(
+            models.UsersRealTimeIntake.id == entry_id,
+            models.UsersRealTimeIntake.is_active == True,
+            models.UsersRealTimeIntake.deleted_at.is_(None),
+            models.UsersRealTimeIntake.invalidated_at.is_(None)
+        ).first()
+
+        if not old_entry:
+            raise HTTPException(status_code=404, detail="Intake entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        old_entry.is_active = False
+        old_entry.invalidated_at = now
+        old_entry.updated_at = now
+
+        new_entry = models.UsersRealTimeIntake(
+            user_id=old_entry.user_id,
+            drink_name=data.drink_name,
+            caffeine_amount=data.caffeine_amount,
+            taking_timestamp=data.taking_timestamp,
+            created_at=now,
+            updated_at=now,
+            is_active=True,
+            deleted_at=None,
+            invalidated_at=None,
+            edited_from_id=old_entry.id
+        )
+
+        db.add(new_entry)
+        db.commit()
+        db.refresh(new_entry)
+
+        calc_result = trigger_calculation(new_entry.user_id)
+
+        return {
+            "status": "success",
+            "id": new_entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/users_intake/{entry_id}", response_model=schemas.UsersRealTimeIntakeCreate_API_Response)
+def delete_user_intake(entry_id: int, db: Session = Depends(get_db)):
+    try:
+        entry = db.query(models.UsersRealTimeIntake).filter(
+            models.UsersRealTimeIntake.id == entry_id,
+            models.UsersRealTimeIntake.is_active == True,
+            models.UsersRealTimeIntake.deleted_at.is_(None),
+            models.UsersRealTimeIntake.invalidated_at.is_(None)
+        ).first()
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Intake entry not found or already inactive")
+
+        now = datetime.now(timezone.utc)
+
+        entry.is_active = False
+        entry.deleted_at = now
+        entry.updated_at = now
+
+        db.commit()
+
+        calc_result = trigger_calculation(entry.user_id)
+
+        return {
+            "status": "success",
+            "id": entry.id,
+            "calculation": calc_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))            
+# ================================================================================================
 
 @app.get("/users_pvt/", response_model=list[schemas.UsersPVTResults_DB_Response])
 def get_pvt_results(user_id: UUID = Query(None), db: Session = Depends(get_db)):

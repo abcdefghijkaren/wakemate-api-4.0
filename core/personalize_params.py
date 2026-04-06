@@ -115,6 +115,9 @@ def get_all_sleep_intervals(cur, user_id):
         SELECT sleep_start_time, sleep_end_time
         FROM users_real_sleep_data
         WHERE user_id = %s
+          AND is_active = TRUE
+          AND deleted_at IS NULL
+          AND invalidated_at IS NULL
         ORDER BY sleep_start_time
     """, (user_id,))
     return cur.fetchall()
@@ -124,6 +127,9 @@ def get_all_intakes(cur, user_id):
         SELECT taking_timestamp, caffeine_amount
         FROM users_real_time_intake
         WHERE user_id = %s
+          AND is_active = TRUE
+          AND deleted_at IS NULL
+          AND invalidated_at IS NULL
         ORDER BY taking_timestamp
     """, (user_id,))
     return cur.fetchall()

@@ -19,9 +19,19 @@ MERGE_SECONDS = 3600  # 合併 1 小時內的推薦成一筆
 def _get_distinct_user_ids(cursor):
     cursor.execute("""
         SELECT DISTINCT user_id FROM (
-            SELECT user_id FROM users_target_waking_period
+            SELECT user_id
+            FROM users_target_waking_period
+            WHERE is_active = TRUE
+            AND deleted_at IS NULL
+            AND invalidated_at IS NULL
+
             UNION
-            SELECT user_id FROM users_real_sleep_data
+
+            SELECT user_id
+            FROM users_real_sleep_data
+            WHERE is_active = TRUE
+            AND deleted_at IS NULL
+            AND invalidated_at IS NULL
         ) AS u
     """)
     return [row[0] for row in cursor.fetchall()]
@@ -30,9 +40,30 @@ def _get_distinct_user_ids(cursor):
 def _get_latest_source_ts(cursor, user_id):
     cursor.execute("""
         SELECT GREATEST(
-            COALESCE((SELECT MAX(updated_at) FROM users_target_waking_period WHERE user_id = %s), to_timestamp(0)),
-            COALESCE((SELECT MAX(updated_at) FROM users_real_sleep_data    WHERE user_id = %s), to_timestamp(0)),
-            COALESCE((SELECT MAX(updated_at) FROM users_real_time_intake  WHERE user_id = %s), to_timestamp(0))
+            COALESCE((
+                SELECT MAX(updated_at)
+                FROM users_target_waking_period
+                WHERE user_id = %s
+                  AND is_active = TRUE
+                  AND deleted_at IS NULL
+                  AND invalidated_at IS NULL
+            ), to_timestamp(0)),
+            COALESCE((
+                SELECT MAX(updated_at)
+                FROM users_real_sleep_data
+                WHERE user_id = %s
+                  AND is_active = TRUE
+                  AND deleted_at IS NULL
+                  AND invalidated_at IS NULL
+            ), to_timestamp(0)),
+            COALESCE((
+                SELECT MAX(updated_at)
+                FROM users_real_time_intake
+                WHERE user_id = %s
+                  AND is_active = TRUE
+                  AND deleted_at IS NULL
+                  AND invalidated_at IS NULL
+            ), to_timestamp(0))
         )
     """, (user_id, user_id, user_id))
     (ts,) = cursor.fetchone()
@@ -266,6 +297,9 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 SELECT user_id, target_start_time, target_end_time
                 FROM users_target_waking_period
                 WHERE user_id = %s
+                    AND is_active = TRUE
+                    AND deleted_at IS NULL
+                    AND invalidated_at IS NULL
                 ORDER BY target_start_time
             """, (uid,))
             waking_periods = cur.fetchall()
@@ -274,6 +308,9 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 SELECT user_id, sleep_start_time, sleep_end_time
                 FROM users_real_sleep_data
                 WHERE user_id = %s
+                    AND is_active = TRUE
+                    AND deleted_at IS NULL
+                    AND invalidated_at IS NULL
                 ORDER BY sleep_start_time
             """, (uid,))
             sleep_rows = cur.fetchall()
@@ -283,6 +320,9 @@ def run_caffeine_recommendation(conn, user_params_map: Optional[Dict] = None):
                 SELECT taking_timestamp, caffeine_amount
                 FROM users_real_time_intake
                 WHERE user_id = %s
+                    AND is_active = TRUE
+                    AND deleted_at IS NULL
+                    AND invalidated_at IS NULL
                 ORDER BY taking_timestamp
             """, (uid,))
             caf_rows = cur.fetchall()  # list of (taking_timestamp, caffeine_amount)

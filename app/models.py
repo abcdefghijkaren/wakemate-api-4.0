@@ -51,7 +51,12 @@ class UsersRealSleepData(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     sleep_start_time = Column(DateTime(timezone=True), nullable=False)
     sleep_end_time = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    edited_from_id = Column(Integer, ForeignKey("users_real_sleep_data.id"), nullable=True)
 
     user = relationship("User", back_populates="sleep_data")
 
@@ -63,7 +68,12 @@ class UsersTargetWakingPeriod(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     target_start_time = Column(DateTime(timezone=True), nullable=False)
     target_end_time = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    edited_from_id = Column(Integer, ForeignKey("users_target_waking_period.id"), nullable=True)
 
     user = relationship("User", back_populates="waking_periods")
 
@@ -76,7 +86,12 @@ class UsersRealTimeIntake(Base):
     drink_name = Column(String, nullable=False)
     caffeine_amount = Column(Integer, nullable=False)
     taking_timestamp = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    edited_from_id = Column(Integer, ForeignKey("users_real_time_intake.id"), nullable=True)
 
     user = relationship("User", back_populates="intake_data")
 

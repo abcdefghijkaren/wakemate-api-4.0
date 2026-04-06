@@ -62,13 +62,23 @@ class UsersRealSleepDataCreate(BaseModel):
     sleep_end_time: datetime
 
 class UsersRealSleepData_DB_Response(BaseModel):
+    id: int
     user_id: UUID
     sleep_start_time:  datetime
     sleep_end_time: datetime
+    created_at: datetime
     updated_at: datetime
+    is_active: bool
+    deleted_at: Optional[datetime]
+    invalidated_at: Optional[datetime]
+    edited_from_id: Optional[int]
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+class UsersRealSleepDataUpdate(BaseModel):
+    sleep_start_time: datetime
+    sleep_end_time: datetime
 
 # API 回傳格式 (新增成功用)
 class UsersRealSleepDataCreate_API_Response(BaseModel):
@@ -85,13 +95,24 @@ class UsersTargetWakingPeriodCreate(BaseModel):
     target_end_time:  Optional[datetime]
 
 class UsersTargetWakingPeriod_DB_Response(BaseModel):
+    id: int
     user_id: UUID
     target_start_time:  Optional[datetime]  # ISO 格式時間字串
     target_end_time:  Optional[datetime]
+    created_at: datetime
     updated_at: datetime
+    is_active: bool
+    deleted_at: Optional[datetime]
+    invalidated_at: Optional[datetime]
+    edited_from_id: Optional[int]
+
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+class UsersTargetWakingPeriodUpdate(BaseModel):
+    target_start_time: datetime
+    target_end_time: datetime
 
 # API 回傳格式 (新增成功用)
 class UsersTargetWakingPeriodCreate_API_Response(BaseModel):
@@ -109,14 +130,26 @@ class UsersRealTimeIntakeCreate(BaseModel):
     taking_timestamp: datetime
 
 class UsersRealTimeIntake_DB_Response(BaseModel):
+    id: int
     user_id: UUID
     drink_name: str
     caffeine_amount: int
     taking_timestamp: datetime
+    created_at: datetime
     updated_at: datetime
+    is_active: bool
+    deleted_at: Optional[datetime]
+    invalidated_at: Optional[datetime]
+    edited_from_id: Optional[int]
+
 
     class Config:
         from_attributes = True  # 替代 orm_mode = True
+
+class UsersRealTimeIntakeUpdate(BaseModel):
+    drink_name: str
+    caffeine_amount: int
+    taking_timestamp: datetime
 
 # API 回傳格式 (新增成功用)
 class UsersRealTimeIntakeCreate_API_Response(BaseModel):
